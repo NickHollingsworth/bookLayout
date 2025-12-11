@@ -1,0 +1,5 @@
+H1 Another Document
+
+This is a different file.
+It is shown when you pass ?file=another.txt
+
