@@ -29,7 +29,7 @@ from markdown_it import MarkdownIt
 from mdit_py_plugins.footnote import footnote_plugin
 from mdit_py_plugins.deflist import deflist_plugin
 from mdit_py_plugins.tasklists import tasklists_plugin
-from mdit_py_plugins.attrs import attrs_plugin  # <- attribute/class support
+from mdit_py_plugins.attrs import attrs_plugin, attrs_block_plugin
 
 # Optional: only needed for --watch
 try:
@@ -51,7 +51,11 @@ def create_markdown_parser() -> MarkdownIt:
     - Base: "gfm-like" (tables, strikethrough, linkify)
     - linkify: auto-detect bare URLs (requires linkify-it-py + uc-micro-py)
     - typographer: smart quotes, dashes
-    - footnotes, definition lists, task lists, attrs (classes/ids) via mdit-py-plugins
+    - footnotes, definition lists, task lists via mdit-py-plugins
+    - attrs_plugin: inline attributes, e.g. ![alt](url){.right}
+    - attrs_block_plugin: block attributes on their own line, e.g.
+        {.intro}
+        A paragraph...
     """
     md = MarkdownIt(
         "gfm-like",
@@ -75,13 +79,15 @@ def create_markdown_parser() -> MarkdownIt:
     # enabled=False => checkboxes are disabled in HTML, similar to GitHub.
     md.use(tasklists_plugin, enabled=False, label=True, label_after=False)
 
-    # Attributes / classes / ids, e.g.
-    #   # Heading {.big #main}
-    #   Paragraph text {.note}
-    #   - item
-    #   - item
-    #   {.fancy-list}
+    # Inline attributes after certain inline elements (images, code_inline, links, spans)
+    # Example: ![alt](url){#id .class key=value}
     md.use(attrs_plugin)
+
+    # Block attributes on a line by themselves, applying to the block BELOW.
+    # Example:
+    #   {.intro #top}
+    #   # Heading
+    md.use(attrs_block_plugin)
 
     return md
 

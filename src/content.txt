@@ -6,7 +6,7 @@ This paragraph has both an id and multiple classes attached. {#p-main .highlight
 
 ## A Second Heading {.section-heading}
 
-
+{.intro}
 This is a paragraph with **bold**, *italic*, `code`, and a link: https://example.com.
 
 - Bullet item
