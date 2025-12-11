@@ -8,6 +8,11 @@ This is a paragraph with **bold**, *italic*, `code`, and a link: https://example
 - [ ] todo
 - [x] done
 
+# I am Header One
+## I am Header Two
+### I am Header Three
+#### I am Header Four
+
 A table:
 
 | Col A | Col B |
@@ -15,9 +20,9 @@ A table:
 | 1     | 2     |
 
 A footnote reference.[^1]
+[^1]: Footnote text.
 
 Visit https://example.com or http://foo.test.
 Email: someone@example.org
 
-[^1]: Footnote text.
-
+end
