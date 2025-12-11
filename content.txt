@@ -1,7 +1,0 @@
-H1 Main Document
-
-This is a paragraph in the default file.
-It has multiple lines.
-
-Another paragraph here.
-
