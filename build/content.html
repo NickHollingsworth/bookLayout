@@ -2,18 +2,52 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Main Document</title>
+  <title>My Document</title>
   <link rel="stylesheet" href="../style.css">
   <script src="../dev-reload.js" defer></script>
 </head>
 <body>
-<h1>Main Document</h1>
-<p>This is a paragraph in the default file. It has multiple lines.</p>
-<p>Another paragraph here. Or, you know, whatever.</p>
-<p>Now with no additional auto added text. Phew!</p>
-<h1>I am header 1</h1>
-<p>H2 I am header 2</p>
-<p>H3 I am header 3</p>
-<p>InternalLink</p>
+<h1>My Document</h1>
+<p>This is a paragraph with <strong>bold</strong>, <em>italic</em>, <code>code</code>, and a link: <a href="https://example.com">https://example.com</a>.</p>
+<ul class="contains-task-list">
+<li>
+<p>Bullet item</p>
+</li>
+<li>
+<p>Another item</p>
+</li>
+<li class="task-list-item">
+<p><label><input class="task-list-item-checkbox" disabled="disabled" type="checkbox"> todo</label></p>
+</li>
+<li class="task-list-item">
+<p><label><input class="task-list-item-checkbox" checked="checked" disabled="disabled" type="checkbox"> done</label></p>
+</li>
+</ul>
+<p>A table:</p>
+<table>
+<thead>
+<tr>
+<th>Col A</th>
+<th>Col B</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>2</td>
+</tr>
+</tbody>
+</table>
+<p>A footnote reference.<sup class="footnote-ref"><a href="#fn1" id="fnref1">[1]</a></sup></p>
+<p>Visit <a href="https://example.com">https://example.com</a> or <a href="http://foo.test">http://foo.test</a>.
+Email: <a href="mailto:someone@example.org">someone@example.org</a></p>
+<hr class="footnotes-sep" />
+<section class="footnotes">
+<ol class="footnotes-list">
+<li id="fn1" class="footnote-item"><p>Footnote text. <a href="#fnref1" class="footnote-backref">↩︎</a></p>
+</li>
+</ol>
+</section>
+
 </body>
 </html>

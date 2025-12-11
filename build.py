@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Preprocess plain text files into styled HTML files.
+Preprocess plain text (treated as GitHub-flavoured Markdown) into HTML.
 
 - Source files: src/*.txt
 - Output files: build/*.html
@@ -14,8 +14,15 @@ Usage examples:
 import argparse
 import html
 import os
+import re
 from pathlib import Path
-from typing import List
+from typing import Optional
+
+# Markdown-It + plugins for “GFM-ish” behaviour
+from markdown_it import MarkdownIt
+from mdit_py_plugins.footnote import footnote_plugin
+from mdit_py_plugins.deflist import deflist_plugin
+from mdit_py_plugins.tasklists import tasklists_plugin
 
 # Optional: only needed for --watch
 try:
@@ -24,6 +31,52 @@ try:
     WATCHDOG_AVAILABLE = True
 except ImportError:
     WATCHDOG_AVAILABLE = False
+
+
+# ---------------------------------------------------------------------------
+# Markdown configuration
+# ---------------------------------------------------------------------------
+
+def create_markdown_parser() -> MarkdownIt:
+    """
+    Create a MarkdownIt parser configured for GitHub-flavoured style Markdown.
+
+    - Base: "gfm-like" (tables, strikethrough, etc.)
+    - linkify: auto-detect bare URLs
+    - typographer: smart quotes, dashes
+    - footnotes, definition lists, task lists via mdit-py-plugins
+    """
+    md = MarkdownIt(
+        "gfm-like",
+        {
+            "linkify": True,
+            "typographer": True,
+        },
+    )
+
+    # Footnotes: [^1] style
+    md.use(footnote_plugin)
+
+    # Definition lists:
+    # Term
+    # : Definition
+    md.use(deflist_plugin)
+
+    # Task lists:
+    # - [ ] todo
+    # - [x] done
+    # enabled=False means checkboxes are disabled in HTML (like GitHub rendering)
+    md.use(tasklists_plugin, enabled=False, label=True, label_after=False)
+
+    return md
+
+
+MD_PARSER = create_markdown_parser()
+
+
+def render_markdown_to_html(markdown_text: str) -> str:
+    """Render Markdown source to HTML using the configured parser."""
+    return MD_PARSER.render(markdown_text)
 
 
 # ---------------------------------------------------------------------------
@@ -45,23 +98,21 @@ def build_single_source(
     js_path: str,
 ) -> Path:
     """
-    Build a single .txt file into an .html file under build_dir.
+    Build a single .txt (Markdown) file into an .html file under build_dir.
 
     Returns the path to the generated HTML file.
     """
     if not txt_path.exists():
         raise FileNotFoundError(f"Text file not found: {txt_path}")
 
-    # Derive output path
     rel_name = txt_path.stem  # "content" for "content.txt"
     out_path = build_dir / f"{rel_name}.html"
 
     print(f"[build] {txt_path} -> {out_path}")
     raw_text = read_text_file(txt_path)
-    paragraphs = build_paragraph_model(raw_text)
-    body_html = render_paragraphs_to_html(paragraphs)
-    title = derive_title_from_paragraphs(paragraphs, default=rel_name)
-    full_html = wrap_in_document_shell(body_html, title, css_path, js_path, rel_name)
+    body_html = render_markdown_to_html(raw_text)
+    title = derive_title_from_markdown(raw_text, default=rel_name)
+    full_html = wrap_in_document_shell(body_html, title, css_path, js_path)
 
     write_text_file(out_path, full_html)
     return out_path
@@ -83,85 +134,41 @@ def write_text_file(path: Path, content: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Text → paragraph model
+# Title derivation from Markdown
 # ---------------------------------------------------------------------------
 
-class Paragraph:
-    """Represents a single paragraph or heading in the document."""
-
-    def __init__(self, kind: str, text: str) -> None:
-        """
-        kind: "paragraph" or "heading1" (more kinds can be added later)
-        text: raw text content (unescaped)
-        """
-        self.kind = kind
-        self.text = text
-
-    def __repr__(self) -> str:
-        return f"Paragraph(kind={self.kind!r}, text={self.text!r})"
-
-
-def split_into_blocks(raw_text: str) -> List[str]:
+def derive_title_from_markdown(markdown_text: str, default: str) -> str:
     """
-    Split text into logical blocks:
+    Use the first ATX-style heading line as the HTML <title>, if present.
 
-    - Normalise line endings.
-    - Blank lines separate blocks.
-    - Each block is a list of non-blank lines joined by spaces.
+    Examples that will be used as the title:
+      "# My Title"
+      "## My Title ##"
     """
-    normalised = raw_text.replace("\r\n", "\n")
-    lines = normalised.split("\n")
+    for line in markdown_text.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("#"):
+            continue
 
-    blocks: List[str] = []
-    buffer: List[str] = []
+        # Match "#" or "##" etc, then at least one space, then text.
+        m = re.match(r"^#+\s+(.*)$", stripped)
+        if not m:
+            continue
 
-    def flush_buffer() -> None:
-        nonlocal buffer
-        if not buffer:
-            return
-        combined = " ".join(line.strip() for line in buffer).strip()
-        buffer = []
-        if combined:
-            blocks.append(combined)
+        heading = m.group(1).strip()
+        if not heading:
+            continue
 
-    for line in lines:
-        if line.strip() == "":
-            flush_buffer()
-        else:
-            buffer.append(line)
+        # Strip any trailing " ###" style hashes if present.
+        heading = re.sub(r"\s+#+\s*$", "", heading).strip()
+        if heading:
+            return heading
 
-    flush_buffer()
-    return blocks
-
-
-def interpret_block(block: str) -> Paragraph:
-    """
-    Interpret a block of text and create a Paragraph object.
-
-    Rules:
-      - If block begins with "H1" and whitespace, create heading1.
-      - Otherwise, create a normal paragraph.
-    """
-    stripped = block.lstrip()
-
-    if stripped.startswith("H1 "):
-        # "H1 X..." → heading1 with text "X..."
-        heading_text = stripped[3:].strip()
-        return Paragraph(kind="heading1", text=heading_text)
-
-    # Default: simple paragraph
-    return Paragraph(kind="paragraph", text=block)
-
-
-def build_paragraph_model(raw_text: str) -> List[Paragraph]:
-    """Convert raw text into a list of Paragraph objects."""
-    blocks = split_into_blocks(raw_text)
-    paragraphs = [interpret_block(block) for block in blocks]
-    return paragraphs
+    return default
 
 
 # ---------------------------------------------------------------------------
-# Paragraph model → HTML
+# Minimal document shell
 # ---------------------------------------------------------------------------
 
 def html_escape(text: str) -> str:
@@ -169,51 +176,16 @@ def html_escape(text: str) -> str:
     return html.escape(text, quote=True)
 
 
-def render_paragraph(paragraph: Paragraph) -> str:
-    """Render a single Paragraph object as HTML."""
-    escaped = html_escape(paragraph.text)
-
-    if paragraph.kind == "heading1":
-        return f"<h1>{escaped}</h1>"
-
-    # Default paragraph
-    return f"<p>{escaped}</p>"
-
-
-def render_paragraphs_to_html(paragraphs: List[Paragraph]) -> str:
-    """
-    Render a list of Paragraphs to HTML suitable for inserting into <main>.
-    """
-    rendered = [render_paragraph(p) for p in paragraphs]
-    return "\n".join(rendered)
-
-
-# ---------------------------------------------------------------------------
-# Full document shell
-# ---------------------------------------------------------------------------
-
-def derive_title_from_paragraphs(paragraphs: List[Paragraph], default: str) -> str:
-    """
-    Use the first heading1 as the HTML <title> if present, otherwise a default.
-    """
-    for p in paragraphs:
-        if p.kind == "heading1" and p.text.strip():
-            return p.text.strip()
-    return default
-
-
 def wrap_in_document_shell(
     body_html: str,
     title: str,
     css_href: str,
     js_href: str,
-    source_basename: str,  # kept for signature compatibility, not used
 ) -> str:
     """
     Wrap the rendered body HTML in a minimal HTML document.
 
-    The body contains only the reformatted text (headings/paragraphs), no
-    extra header, filename, or surrounding layout elements.
+    The <body> contains only the Markdown-generated HTML, no extra wrappers.
     """
     escaped_title = html_escape(title)
 
@@ -251,7 +223,6 @@ class TxtChangeHandler(FileSystemEventHandler):
             return
         path = Path(event.src_path)
         if path.suffix.lower() == ".txt":
-            # Rebuild just the changed file
             try:
                 build_single_source(path, self.src_dir, self.build_dir, self.css_path, self.js_path)
             except Exception as exc:
@@ -273,7 +244,6 @@ def watch_sources(src_dir: Path, build_dir: Path, css_path: str, js_path: str) -
 
     try:
         while True:
-            # Just keep running
             observer.join(1)
     except KeyboardInterrupt:
         observer.stop()
@@ -285,7 +255,7 @@ def watch_sources(src_dir: Path, build_dir: Path, css_path: str, js_path: str) -
 # ---------------------------------------------------------------------------
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Build HTML from plain text files.")
+    parser = argparse.ArgumentParser(description="Build HTML from Markdown (.txt) files.")
     parser.add_argument(
         "name",
         nargs="?",

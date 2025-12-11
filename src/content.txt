@@ -1,18 +1,23 @@
-H1 Main Document
+# My Document
 
-This is a paragraph in the default file.
-It has multiple lines.
+This is a paragraph with **bold**, *italic*, `code`, and a link: https://example.com.
 
-Another paragraph here.
-Or, you know, whatever.
+- Bullet item
+- Another item
 
-Now with no additional auto added text. Phew!
+- [ ] todo
+- [x] done
 
-H1 I am header 1
+A table:
 
-H2 I am header 2
+| Col A | Col B |
+| ----- | ----- |
+| 1     | 2     |
 
-H3 I am header 3
+A footnote reference.[^1]
 
-InternalLink
+Visit https://example.com or http://foo.test.
+Email: someone@example.org
+
+[^1]: Footnote text.
 
