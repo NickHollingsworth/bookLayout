@@ -207,19 +207,16 @@ def wrap_in_document_shell(
     title: str,
     css_href: str,
     js_href: str,
-    source_basename: str,
+    source_basename: str,  # kept for signature compatibility, not used
 ) -> str:
     """
-    Wrap the rendered body HTML in a full HTML document.
+    Wrap the rendered body HTML in a minimal HTML document.
 
-    css_href: path/URL to the shared CSS file (e.g. "../style.css" or "/style.css")
-    js_href:  path/URL to the shared dev reload JS file (e.g. "../dev-reload.js")
-    source_basename: e.g. "content" (used in a small header at top of page)
+    The body contains only the reformatted text (headings/paragraphs), no
+    extra header, filename, or surrounding layout elements.
     """
     escaped_title = html_escape(title)
-    escaped_source = html_escape(source_basename)
 
-    # You can adjust these hrefs and the structure as needed later.
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -229,12 +226,7 @@ def wrap_in_document_shell(
   <script src="{js_href}" defer></script>
 </head>
 <body>
-  <header id="doc-header">
-    <div>Source: {escaped_source}.txt</div>
-  </header>
-  <main id="content">
 {body_html}
-  </main>
 </body>
 </html>
 """
