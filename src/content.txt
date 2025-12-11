@@ -6,6 +6,13 @@ It has multiple lines.
 Another paragraph here.
 Or, you know, whatever.
 
-
 Now with no additional auto added text. Phew!
+
+H1 I am header 1
+
+H2 I am header 2
+
+H3 I am header 3
+
+InternalLink
 
