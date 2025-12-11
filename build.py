@@ -24,12 +24,12 @@ import argparse
 import html
 import re
 from pathlib import Path
-from typing import Optional
 
 from markdown_it import MarkdownIt
 from mdit_py_plugins.footnote import footnote_plugin
 from mdit_py_plugins.deflist import deflist_plugin
 from mdit_py_plugins.tasklists import tasklists_plugin
+from mdit_py_plugins.attrs import attrs_plugin  # <- attribute/class support
 
 # Optional: only needed for --watch
 try:
@@ -48,10 +48,10 @@ def create_markdown_parser() -> MarkdownIt:
     """
     Create a MarkdownIt parser configured for GitHub-flavoured style Markdown.
 
-    - Base: "gfm-like" (tables, strikethrough, etc.)
+    - Base: "gfm-like" (tables, strikethrough, linkify)
     - linkify: auto-detect bare URLs (requires linkify-it-py + uc-micro-py)
     - typographer: smart quotes, dashes
-    - footnotes, definition lists, task lists via mdit-py-plugins
+    - footnotes, definition lists, task lists, attrs (classes/ids) via mdit-py-plugins
     """
     md = MarkdownIt(
         "gfm-like",
@@ -74,6 +74,14 @@ def create_markdown_parser() -> MarkdownIt:
     # - [x] done
     # enabled=False => checkboxes are disabled in HTML, similar to GitHub.
     md.use(tasklists_plugin, enabled=False, label=True, label_after=False)
+
+    # Attributes / classes / ids, e.g.
+    #   # Heading {.big #main}
+    #   Paragraph text {.note}
+    #   - item
+    #   - item
+    #   {.fancy-list}
+    md.use(attrs_plugin)
 
     return md
 
