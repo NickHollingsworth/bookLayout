@@ -1,0 +1,57 @@
+/* A5 portrait: 148mm × 210mm */
+@page {
+  size: A5 portrait;
+  margin: 0;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #fff;
+
+  /* from your stylesheet */
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  line-height: 1.5;
+}
+
+/* One .page element = one PDF page */
+.page {
+  width: 148mm;
+  height: 210mm;
+  box-sizing: border-box;
+
+  /* replaces body margin: this is your print margin */
+  padding: 12mm;
+
+  break-after: page;
+  page-break-after: always;
+
+  overflow: hidden;
+  background: #fff;
+}
+
+.page:last-child {
+  break-after: auto;
+  page-break-after: auto;
+}
+
+/* Headings (same intent as yours, but in print units) */
+h1 {
+  margin: 0 0 6mm 0;     /* instead of 2rem/1rem */
+  font-size: 18pt;       /* roughly similar visual weight */
+}
+
+/* Paragraph spacing (same intent, but in print units) */
+p {
+  margin: 0 0 4mm 0;     /* instead of 1rem */
+}
+
+/* Screen-only preview niceties */
+@media screen {
+  body { background: #eee; }
+  .page {
+    margin: 10mm auto;
+    outline: 1px solid rgba(0,0,0,.25);
+  }
+}
+
