@@ -35,13 +35,8 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from markdown_it import MarkdownIt
-from mdit_py_plugins.footnote import footnote_plugin
-from mdit_py_plugins.deflist import deflist_plugin
-from mdit_py_plugins.tasklists import tasklists_plugin
-from mdit_py_plugins.attrs import attrs_plugin, attrs_block_plugin
-
 from build.config import BuildConfig, load_build_config, require_nonempty
+from build.markdown_to_html import render_markdown_to_html
 
 # Optional: only needed for --watch
 try:
@@ -50,27 +45,6 @@ try:
     WATCHDOG_AVAILABLE = True
 except ImportError:
     WATCHDOG_AVAILABLE = False
-
-
-# ---------------------------------------------------------------------------
-# Markdown configuration
-# ---------------------------------------------------------------------------
-
-def create_markdown_parser() -> MarkdownIt:
-    md = MarkdownIt("gfm-like", {"linkify": True, "typographer": True})
-    md.use(footnote_plugin)
-    md.use(deflist_plugin)
-    md.use(tasklists_plugin, enabled=False, label=True, label_after=False)
-    md.use(attrs_plugin)
-    md.use(attrs_block_plugin)
-    return md
-
-
-MD_PARSER = create_markdown_parser()
-
-
-def render_markdown_to_html(markdown_text: str) -> str:
-    return MD_PARSER.render(markdown_text)
 
 
 # ---------------------------------------------------------------------------
