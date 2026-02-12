@@ -349,7 +349,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--css",
-        default="../style.css",
+        default="../templates/style.css",
         help="Path/URL to CSS file as used in generated HTML (default: ../style.css).",
     )
     parser.add_argument(
