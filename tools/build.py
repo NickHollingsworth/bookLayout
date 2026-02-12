@@ -29,13 +29,13 @@ from __future__ import annotations
 import argparse
 import html
 import re
-import shutil
 import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
 
 from build.config import BuildConfig, load_build_config, require_nonempty
+from build.preprocess import preprocess_all, preprocess_one
 from build.markdown_to_html import render_markdown_to_html
 from build.template import wrap_in_document_shell
 
@@ -64,38 +64,6 @@ def write_text_file(path: Path, content: str) -> None:
 
 def list_md_files(dir_path: Path) -> list[Path]:
     return sorted(dir_path.glob("*.md"))
-
-
-# ---------------------------------------------------------------------------
-# Step 1: preprocess (currently: copy)
-# ---------------------------------------------------------------------------
-
-def preprocess_all(src_dir: Path, preprocess_dir: Path) -> int:
-    md_files = list_md_files(src_dir)
-    if not md_files:
-        print(f"[preprocess] No .md files found in: {src_dir}")
-        return 0
-
-    preprocess_dir.mkdir(parents=True, exist_ok=True)
-
-    for src in md_files:
-        dst = preprocess_dir / src.name
-        print(f"[preprocess] {src} -> {dst}")
-        shutil.copy2(src, dst)
-
-    return 0
-
-
-def preprocess_one(src_dir: Path, preprocess_dir: Path, name: str) -> int:
-    src = src_dir / f"{name}.md"
-    if not src.exists():
-        raise FileNotFoundError(f"Markdown file not found: {src}")
-
-    preprocess_dir.mkdir(parents=True, exist_ok=True)
-    dst = preprocess_dir / src.name
-    print(f"[preprocess] {src} -> {dst}")
-    shutil.copy2(src, dst)
-    return 0
 
 
 # ---------------------------------------------------------------------------
