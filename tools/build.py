@@ -37,6 +37,8 @@ from pathlib import Path
 
 from build.config import BuildConfig, load_build_config, require_nonempty
 from build.markdown_to_html import render_markdown_to_html
+from build.template import wrap_in_document_shell
+
 
 # Optional: only needed for --watch
 try:
@@ -112,32 +114,6 @@ def derive_title_from_markdown(markdown_text: str, default: str) -> str:
         if heading:
             return heading
     return default
-
-
-def load_template(path: Path) -> str:
-    if not path.exists():
-        raise FileNotFoundError(f"Template file not found: {path}")
-    return path.read_text(encoding="utf-8")
-
-
-def wrap_in_document_shell(
-    body_html: str,
-    title: str,
-    css_href: str,
-    js_href: str,
-    template_path: Path,
-) -> str:
-    template = load_template(template_path)
-    css_href = require_nonempty("css", css_href)
-    js_href = require_nonempty("dev_js", js_href)
-
-    return (
-        template
-        .replace("{{title}}", html.escape(title, quote=True))
-        .replace("{{css}}", css_href)
-        .replace("{{dev_js}}", js_href)
-        .replace("{{body}}", body_html)
-    )
 
 
 def render_all(
