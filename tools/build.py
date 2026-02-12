@@ -1,30 +1,38 @@
 #!/usr/bin/env python3
 """
-Preprocess plain text (GitHub-flavoured Markdown) into HTML.
+Build pipeline for print-oriented docs.
 
-- Source files:  src/*.md
-- HTML template: tools/templates/page.html
-- CSS styling :  ../../tools/style/style.html
-- js runtime scripts:  ../../tools/scripts/reload.js
-- Output files:  tmp/step-2-resulting-html/*.html
+Step 1: preprocess (currently: copy)
+  src_dir/*.md -> preprocess_dir/*.md
 
-Usage examples:
-  python build.py
-      Build all src/*.md once -> tmp/step-2-resulting-html/*.html
+Step 2: render
+  preprocess_dir/*.md -> build_dir/*.html
 
-  python build.py content
-      Build src/content.md -> tmp/step-2-resulting-html/content.html
+Default behaviour (no flags): run Step 1 then Step 2.
 
-  python build.py --watch
-      Watch src/ for .md changes and rebuild automatically
+Flags:
+  --preprocess-only   Run Step 1 only
+  --render-only       Run Step 2 only (expects preprocess_dir populated)
 
-Required packages (in your venv):
-  pip install markdown-it-py mdit-py-plugins linkify-it-py uc-micro-py watchdog
+Config:
+  Plain text key=value file, default tools/build.conf
+  CLI overrides config.
+
+Watch:
+  --watch with default (both): watches src_dir and runs both steps
+  --watch --preprocess-only: watches src_dir and runs preprocess only
+  --watch --render-only: watches preprocess_dir and runs render only
 """
+
+from __future__ import annotations
 
 import argparse
 import html
 import re
+import shutil
+import sys
+import time
+from dataclasses import dataclass
 from pathlib import Path
 
 from markdown_it import MarkdownIt
@@ -43,54 +51,80 @@ except ImportError:
 
 
 # ---------------------------------------------------------------------------
+# Config (plain text key = value)
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class BuildConfig:
+    src_dir: str = "src"
+    preprocess_dir: str = "tmp/step-1-enhanced-md"
+    build_dir: str = "tmp/step-2-resulting-html"
+    template: str = "tools/templates/page.html"
+    css: str = "../../tools/style/style.css"
+    dev_js: str = "../../tools/scripts/reload.js"
+
+
+def parse_kv_config(path: Path) -> dict[str, str]:
+    if not path.exists():
+        raise FileNotFoundError(f"Config file not found: {path}")
+
+    data: dict[str, str] = {}
+    for lineno, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "=" not in line:
+            raise ValueError(f"{path}:{lineno}: expected 'key = value' (missing '='): {raw!r}")
+
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+
+        if not key:
+            raise ValueError(f"{path}:{lineno}: empty key in line: {raw!r}")
+        if value == "":
+            raise ValueError(f"{path}:{lineno}: empty value for key '{key}'")
+
+        data[key] = value
+
+    return data
+
+
+def load_build_config(path: Path) -> BuildConfig:
+    raw = parse_kv_config(path)
+
+    allowed = {"src_dir", "preprocess_dir", "build_dir", "template", "css", "dev_js"}
+    unknown = sorted(set(raw.keys()) - allowed)
+    if unknown:
+        raise ValueError(f"{path}: unknown config keys: {', '.join(unknown)}")
+
+    return BuildConfig(
+        src_dir=raw.get("src_dir", BuildConfig.src_dir),
+        preprocess_dir=raw.get("preprocess_dir", BuildConfig.preprocess_dir),
+        build_dir=raw.get("build_dir", BuildConfig.build_dir),
+        template=raw.get("template", BuildConfig.template),
+        css=raw.get("css", BuildConfig.css),
+        dev_js=raw.get("dev_js", BuildConfig.dev_js),
+    )
+
+
+def require_nonempty(name: str, value: str | None) -> str:
+    if value is None or not str(value).strip():
+        raise ValueError(f"Required setting '{name}' is not set (check config file or CLI).")
+    return value
+
+
+# ---------------------------------------------------------------------------
 # Markdown configuration
 # ---------------------------------------------------------------------------
 
 def create_markdown_parser() -> MarkdownIt:
-    """
-    Create a MarkdownIt parser configured for GitHub-flavoured style Markdown.
-
-    - Base: "gfm-like" (tables, strikethrough, linkify)
-    - linkify: auto-detect bare URLs (requires linkify-it-py + uc-micro-py)
-    - typographer: smart quotes, dashes
-    - footnotes, definition lists, task lists via mdit-py-plugins
-    - attrs_plugin: inline attributes, e.g. ![alt](url){.right}
-    - attrs_block_plugin: block attributes on their own line, e.g.
-        {.intro}
-        A paragraph...
-    """
-    md = MarkdownIt(
-        "gfm-like",
-        {
-            "linkify": True,
-            "typographer": True,
-        },
-    )
-
-    # Footnotes: [^1]
+    md = MarkdownIt("gfm-like", {"linkify": True, "typographer": True})
     md.use(footnote_plugin)
-
-    # Definition lists:
-    # Term
-    # : Definition
     md.use(deflist_plugin)
-
-    # Task lists:
-    # - [ ] todo
-    # - [x] done
-    # enabled=False => checkboxes are disabled in HTML, similar to GitHub.
     md.use(tasklists_plugin, enabled=False, label=True, label_after=False)
-
-    # Inline attributes after certain inline elements (images, code_inline, links, spans)
-    # Example: ![alt](url){#id .class key=value}
     md.use(attrs_plugin)
-
-    # Block attributes on a line by themselves, applying to the block BELOW.
-    # Example:
-    #   {.intro #top}
-    #   # Heading
     md.use(attrs_block_plugin)
-
     return md
 
 
@@ -98,124 +132,77 @@ MD_PARSER = create_markdown_parser()
 
 
 def render_markdown_to_html(markdown_text: str) -> str:
-    """Render Markdown source to HTML using the configured parser."""
     return MD_PARSER.render(markdown_text)
 
 
 # ---------------------------------------------------------------------------
-# High-level build API
-# ---------------------------------------------------------------------------
-
-def build_all_sources(
-    src_dir: Path,
-    build_dir: Path,
-    css_path: str,
-    js_path: str,
-    template_path: Path,
-) -> None:
-    """Build HTML for all .md files under src_dir."""
-    md_files = sorted(src_dir.glob("*.md"))
-    for md_file in md_files:
-        build_single_source(md_file, src_dir, build_dir, css_path, js_path, template_path)
-
-
-def build_single_source(
-    md_path: Path,
-    src_dir: Path,
-    build_dir: Path,
-    css_path: str,
-    js_path: str,
-    template_path: Path,
-) -> Path:
-    """
-    Build a single .md (Markdown) file into an .html file under build_dir.
-
-    Returns the path to the generated HTML file.
-    """
-    if not md_path.exists():
-        raise FileNotFoundError(f"Text file not found: {md_path}")
-
-    rel_name = md_path.stem  # "content" for "content.md"
-    out_path = build_dir / f"{rel_name}.html"
-
-    print(f"[build] {md_path} -> {out_path}")
-
-    raw_text = read_text_file(md_path)
-    body_html = render_markdown_to_html(raw_text)
-    title = derive_title_from_markdown(raw_text, default=rel_name)
-
-    full_html = wrap_in_document_shell(
-        body_html=body_html,
-        title=title,
-        css_href=css_path,
-        js_href=js_path,
-        template_path=template_path,
-    )
-
-    write_text_file(out_path, full_html)
-    return out_path
-
-
-# ---------------------------------------------------------------------------
-# File IO helpers
+# IO helpers
 # ---------------------------------------------------------------------------
 
 def read_text_file(path: Path) -> str:
-    """Read a UTF-8 text file and return its content as a string."""
     return path.read_text(encoding="utf-8")
 
 
 def write_text_file(path: Path, content: str) -> None:
-    """Write a UTF-8 text file."""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
 
 
+def list_md_files(dir_path: Path) -> list[Path]:
+    return sorted(dir_path.glob("*.md"))
+
+
 # ---------------------------------------------------------------------------
-# Title derivation from Markdown
+# Step 1: preprocess (currently: copy)
+# ---------------------------------------------------------------------------
+
+def preprocess_all(src_dir: Path, preprocess_dir: Path) -> int:
+    md_files = list_md_files(src_dir)
+    if not md_files:
+        print(f"[preprocess] No .md files found in: {src_dir}")
+        return 0
+
+    preprocess_dir.mkdir(parents=True, exist_ok=True)
+
+    for src in md_files:
+        dst = preprocess_dir / src.name
+        print(f"[preprocess] {src} -> {dst}")
+        shutil.copy2(src, dst)
+
+    return 0
+
+
+def preprocess_one(src_dir: Path, preprocess_dir: Path, name: str) -> int:
+    src = src_dir / f"{name}.md"
+    if not src.exists():
+        raise FileNotFoundError(f"Markdown file not found: {src}")
+
+    preprocess_dir.mkdir(parents=True, exist_ok=True)
+    dst = preprocess_dir / src.name
+    print(f"[preprocess] {src} -> {dst}")
+    shutil.copy2(src, dst)
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# Step 2: render
 # ---------------------------------------------------------------------------
 
 def derive_title_from_markdown(markdown_text: str, default: str) -> str:
-    """
-    Use the first ATX-style heading line as the HTML <title>, if present.
-
-    Examples that will be used as the title:
-      "# My Title"
-      "## My Title ##"
-    """
     for line in markdown_text.splitlines():
         stripped = line.strip()
         if not stripped.startswith("#"):
             continue
-
-        # Match "#" or "##" etc, then at least one space, then text.
         m = re.match(r"^#+\s+(.*)$", stripped)
         if not m:
             continue
-
-        heading = m.group(1).strip()
-        if not heading:
-            continue
-
-        # Strip any trailing " ###" style hashes if present.
-        heading = re.sub(r"\s+#+\s*$", "", heading).strip()
+        heading = re.sub(r"\s+#+\s*$", "", m.group(1).strip()).strip()
         if heading:
             return heading
-
     return default
 
 
-# ---------------------------------------------------------------------------
-# Template + document shell
-# ---------------------------------------------------------------------------
-
-def html_escape(text: str) -> str:
-    """HTML-escape a string."""
-    return html.escape(text, quote=True)
-
-
 def load_template(path: Path) -> str:
-    """Load an HTML template file."""
     if not path.exists():
         raise FileNotFoundError(f"Template file not found: {path}")
     return path.read_text(encoding="utf-8")
@@ -228,84 +215,150 @@ def wrap_in_document_shell(
     js_href: str,
     template_path: Path,
 ) -> str:
-    """
-    Load the HTML template and substitute placeholders.
-
-    The template must contain:
-      {{title}}   - document title
-      {{css}}     - href to CSS file
-      {{dev_js}}  - src to reload JS file
-      {{body}}    - rendered Markdown HTML
-    """
     template = load_template(template_path)
+    css_href = require_nonempty("css", css_href)
+    js_href = require_nonempty("dev_js", js_href)
 
-    final_html = (
+    return (
         template
-        .replace("{{title}}", html_escape(title))
+        .replace("{{title}}", html.escape(title, quote=True))
         .replace("{{css}}", css_href)
         .replace("{{dev_js}}", js_href)
         .replace("{{body}}", body_html)
     )
-    return final_html
+
+
+def render_all(
+    preprocess_dir: Path,
+    build_dir: Path,
+    css_href: str,
+    js_href: str,
+    template_path: Path,
+) -> int:
+    md_files = list_md_files(preprocess_dir)
+    if not md_files:
+        print(f"[build] No .md files found in: {preprocess_dir}")
+        return 0
+
+    for md_path in md_files:
+        render_one(md_path, build_dir, css_href, js_href, template_path)
+    return 0
+
+
+def render_one(
+    md_path: Path,
+    build_dir: Path,
+    css_href: str,
+    js_href: str,
+    template_path: Path,
+) -> Path:
+    if not md_path.exists():
+        raise FileNotFoundError(f"Markdown file not found: {md_path}")
+
+    rel_name = md_path.stem
+    out_path = build_dir / f"{rel_name}.html"
+
+    print(f"[build] {md_path} -> {out_path}")
+
+    raw_text = read_text_file(md_path)
+    body_html = render_markdown_to_html(raw_text)
+    title = derive_title_from_markdown(raw_text, default=rel_name)
+
+    full_html = wrap_in_document_shell(
+        body_html=body_html,
+        title=title,
+        css_href=css_href,
+        js_href=js_href,
+        template_path=template_path,
+    )
+
+    write_text_file(out_path, full_html)
+    return out_path
 
 
 # ---------------------------------------------------------------------------
-# Watch mode (optional)
+# Orchestration
 # ---------------------------------------------------------------------------
 
-class TxtChangeHandler(FileSystemEventHandler):
-    """Watchdog handler that rebuilds on any .md change."""
+def run_steps(
+    *,
+    name: str | None,
+    do_preprocess: bool,
+    do_render: bool,
+    src_dir: Path,
+    preprocess_dir: Path,
+    build_dir: Path,
+    css_href: str,
+    js_href: str,
+    template_path: Path,
+) -> int:
+    if do_preprocess:
+        if name:
+            preprocess_one(src_dir, preprocess_dir, name)
+        else:
+            preprocess_all(src_dir, preprocess_dir)
 
-    def __init__(
-        self,
-        src_dir: Path,
-        build_dir: Path,
-        css_path: str,
-        js_path: str,
-        template_path: Path,
-    ) -> None:
+    if do_render:
+        # Render reads from preprocess_dir by design
+        if name:
+            render_one(preprocess_dir / f"{name}.md", build_dir, css_href, js_href, template_path)
+        else:
+            render_all(preprocess_dir, build_dir, css_href, js_href, template_path)
+
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# Watch mode
+# ---------------------------------------------------------------------------
+
+class DebouncedRunner:
+    def __init__(self, min_interval_s: float = 0.25) -> None:
+        self.min_interval_s = min_interval_s
+        self._last_run = 0.0
+
+    def should_run(self) -> bool:
+        now = time.time()
+        if now - self._last_run < self.min_interval_s:
+            return False
+        self._last_run = now
+        return True
+
+
+class WatchHandler(FileSystemEventHandler):
+    def __init__(self, on_change, debounce: DebouncedRunner) -> None:
         super().__init__()
-        self.src_dir = src_dir
-        self.build_dir = build_dir
-        self.css_path = css_path
-        self.js_path = js_path
-        self.template_path = template_path
+        self.on_change = on_change
+        self.debounce = debounce
 
     def on_modified(self, event):
         if event.is_directory:
             return
-        path = Path(event.src_path)
-        if path.suffix.lower() == ".md":
-            try:
-                build_single_source(
-                    md_path=path,
-                    src_dir=self.src_dir,
-                    build_dir=self.build_dir,
-                    css_path=self.css_path,
-                    js_path=self.js_path,
-                    template_path=self.template_path,
-                )
-            except Exception as exc:
-                print(f"[watch] Error rebuilding {path}: {exc}")
+        p = str(event.src_path).lower()
+        if not p.endswith(".md"):
+            return
+        if self.debounce.should_run():
+            self.on_change()
+
+    # some editors trigger "created" rather than "modified"
+    def on_created(self, event):
+        self.on_modified(event)
 
 
-def watch_sources(
-    src_dir: Path,
-    build_dir: Path,
-    css_path: str,
-    js_path: str,
-    template_path: Path,
+def watch(
+    *,
+    watch_dir: Path,
+    on_change,
 ) -> None:
-    """Watch src_dir for changes to .md files and rebuild on modification."""
     if not WATCHDOG_AVAILABLE:
-        raise RuntimeError(
-            "watchdog is not installed. Install it with `pip install watchdog`."
-        )
+        raise RuntimeError("watchdog is not installed. Install it with `pip install watchdog`.")
 
-    print(f"[watch] Watching {src_dir} for changes...")
-    event_handler = TxtChangeHandler(src_dir, build_dir, css_path, js_path, template_path)
+    print(f"[watch] Watching {watch_dir} for .md changes...")
+    debounce = DebouncedRunner()
+    handler = WatchHandler(on_change, debounce)
+
     observer = Observer()
-    observer.schedule(event_handler, str(src_dir), recursive=False)
+    observer.schedule(handler, str(watch_dir), recursive=False)
     observer.start()
 
     try:
@@ -321,88 +374,103 @@ def watch_sources(
 # ---------------------------------------------------------------------------
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Build HTML from Markdown (.md) files using an HTML template."
-    )
+    p = argparse.ArgumentParser(description="Build pipeline: preprocess and/or render HTML.")
+    p.add_argument("name", nargs="?", help="Optional single file base name (without .md).")
+    p.add_argument("--watch", action="store_true", help="Watch for changes and rebuild.")
 
-    parser.add_argument(
-        "name",
-        nargs="?",
-        help=(
-            "Optional base name of a single text file to build, without .md "
-            "(e.g. 'content' builds src/content.md). "
-            "If omitted, all src/*.md are built."
-        ),
-    )
-    parser.add_argument(
-        "--watch",
-        action="store_true",
-        help="Watch src/ for changes and rebuild automatically.",
-    )
-    parser.add_argument(
-        "--src-dir",
-        default="src",
-        help="Source directory containing .md files (default: src).",
-    )
-    parser.add_argument(
-        "--build-dir",
-        default="tmp/step-2-resulting-html",
-        help="Output directory for .html files (default: tmp/step-2-resulting-html).",
-    )
-    parser.add_argument(
-        "--css",
-        default="../../tools/style/style.css",
-        help="Path/URL to CSS file as used in generated HTML (default: ../../tools/style/style.css).",
-    )
-    parser.add_argument(
-        "--dev-js",
-        default="../../tools/scripts/reload.js",
-        help="Path/URL to dev reload JS in generated HTML (default: ../../tools/scripts/reload.js).",
-    )
-    parser.add_argument(
-        "--template",
-        default="tools/templates/page.html",
-        help="HTML template used to wrap rendered Markdown (default: tools/templates/page.html).",
-    )
-    return parser.parse_args()
+    mode = p.add_mutually_exclusive_group()
+    mode.add_argument("--preprocess-only", action="store_true", help="Run preprocess step only.")
+    mode.add_argument("--render-only", action="store_true", help="Run render step only.")
+
+    p.add_argument("--config", default="tools/build.conf", help="Path to config file.")
+
+    # Overrides (CLI wins over config)
+    p.add_argument("--src-dir", default=None, help="Override source directory.")
+    p.add_argument("--preprocess-dir", default=None, help="Override preprocess output directory.")
+    p.add_argument("--build-dir", default=None, help="Override HTML output directory.")
+    p.add_argument("--css", default=None, help="Override CSS href.")
+    p.add_argument("--dev-js", default=None, help="Override dev reload JS href.")
+    p.add_argument("--template", default=None, help="Override HTML template path.")
+
+    return p.parse_args()
 
 
-def main() -> None:
+def main() -> int:
     args = parse_args()
 
-    src_dir = Path(args.src_dir).resolve()
-    build_dir = Path(args.build_dir).resolve()
-    template_path = Path(args.template).resolve()
+    # Load config
+    try:
+        cfg = load_build_config(Path(args.config).resolve())
+    except Exception as exc:
+        print(f"[build] ERROR loading config: {exc}", file=sys.stderr)
+        return 2
 
-    if args.name:
-        md_path = src_dir / f"{args.name}.md"
-        build_single_source(
-            md_path=md_path,
-            src_dir=src_dir,
-            build_dir=build_dir,
-            css_path=args.css,
-            js_path=args.dev_js,
-            template_path=template_path,
-        )
-    else:
-        build_all_sources(
-            src_dir=src_dir,
-            build_dir=build_dir,
-            css_path=args.css,
-            js_path=args.dev_js,
-            template_path=template_path,
-        )
+    # Merge config + CLI
+    try:
+        src_dir_str = require_nonempty("src_dir", args.src_dir or cfg.src_dir)
+        preprocess_dir_str = require_nonempty("preprocess_dir", args.preprocess_dir or cfg.preprocess_dir)
+        build_dir_str = require_nonempty("build_dir", args.build_dir or cfg.build_dir)
+        css_href = require_nonempty("css", args.css or cfg.css)
+        js_href = require_nonempty("dev_js", args.dev_js or cfg.dev_js)
+        template_str = require_nonempty("template", args.template or cfg.template)
+    except Exception as exc:
+        print(f"[build] ERROR: {exc}", file=sys.stderr)
+        return 2
 
+    src_dir = Path(src_dir_str).resolve()
+    preprocess_dir = Path(preprocess_dir_str).resolve()
+    build_dir = Path(build_dir_str).resolve()
+    template_path = Path(template_str).resolve()
+
+    if not src_dir.exists():
+        print(f"[build] ERROR: source directory does not exist: {src_dir}", file=sys.stderr)
+        return 2
+
+    do_preprocess = not args.render_only
+    do_render = not args.preprocess_only
+
+    def run_now():
+        try:
+            run_steps(
+                name=args.name,
+                do_preprocess=do_preprocess,
+                do_render=do_render,
+                src_dir=src_dir,
+                preprocess_dir=preprocess_dir,
+                build_dir=build_dir,
+                css_href=css_href,
+                js_href=js_href,
+                template_path=template_path,
+            )
+        except Exception as exc:
+            print(f"[build] ERROR: {exc}", file=sys.stderr)
+
+    # One-shot run
+    try:
+        run_now()
+    except Exception as exc:
+        print(f"[build] ERROR: {exc}", file=sys.stderr)
+        return 1
+
+    # Watch mode
     if args.watch:
-        watch_sources(
-            src_dir=src_dir,
-            build_dir=build_dir,
-            css_path=args.css,
-            js_path=args.dev_js,
-            template_path=template_path,
-        )
+        if args.preprocess_only:
+            watch_dir = src_dir
+        elif args.render_only:
+            watch_dir = preprocess_dir
+        else:
+            # both: watch src and run both to avoid double-trigger loops
+            watch_dir = src_dir
+
+        try:
+            watch(watch_dir=watch_dir, on_change=run_now)
+        except Exception as exc:
+            print(f"[watch] ERROR: {exc}", file=sys.stderr)
+            return 2
+
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
 

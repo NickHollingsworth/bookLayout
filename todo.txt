@@ -9,7 +9,12 @@ strip out args and watcher functions?
 make a preprocessor that initially just copies md fom src to tmp/step-1-enhanced-md
 
 
-make a clean.py that empties tep 1 and step 2 directories
+make a clean arg that empties step 1 and step 2 directories
+
+seperate out tools/build/ python files so we have small components not a big monolith
+
+only rebuild the ones that have changed, either from the wath trigger or by inspecting timestamps
+
 
 preproces [[page]]
 
