@@ -1,0 +1,25 @@
+Now i am ready to have a preprocessor that takes a [[page]] directive in a markdown file and creates a new markdown file with the section relevant start and end html added to it. 
+
+Ppppplease
+
+strip out all constants from build.py into a constants file that build py uses
+
+strip out args and watcher functions?
+
+make a preprocessor that initially just copies md fom src to tmp/step-1-enhanced-md
+
+
+make a clean.py that empties tep 1 and step 2 directories
+
+preproces [[page]]
+
+add tests for overflow or whatever
+
+add grid
+
+
+
+
+
+
+
