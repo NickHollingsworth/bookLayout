@@ -5,9 +5,11 @@ This project lets you:
 - Write plain text files (treated as **GitHub-flavoured Markdown**).
 - Automatically build them into HTML files using a shared HTML template.
 - View the generated HTML in a browser.
-- Optionally run in a “dev” mode where:
+- Optionally run in a “reload” mode where:
   - Saving a `.txt` file triggers a rebuild (via a watcher).
+  - build with --watch
   - The browser auto-reloads the page while preserving scroll position.
+  - append the url with ?reload=(number of seconds)
 - Keep the HTML as a permanent, debug-friendly artifact that can be printed to PDF.
 
 The core pipeline:
@@ -35,9 +37,9 @@ pip install \
 
 # Auto browser reload
 
-dev-reload.js is a small script that automatically reloads the page if its changed:
+reload.js is a small script that automatically reloads the page if its changed:
 
-. Checks the URL for ?dev=1.
+. Checks the URL for ?reload=(number of seconds)
 
 . If present, periodically checks the current page’s headers (e.g. Last-Modified).
 

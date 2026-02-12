@@ -1,6 +1,6 @@
-<section class="page" data-page="1">
+[[page]]
 
-# Page one
+# Page one only
 
 Lorem ipsum dolor sit amet, consectetur adipiscing elit. 
 Sed non risus. Suspendisse lectus tortor, dignissim sit amet, 
@@ -18,7 +18,6 @@ pretium a, enim. Pellentesque congue.
 Ut in risus volutpat libero pharetra tempor. Cras vestibulum 
 bibendum augue. Praesent egestas leo in pede.
 
-</section>
 
 <section class="page" data-page="2">
 
