@@ -38,15 +38,7 @@ from build.config import BuildConfig, load_build_config, require_nonempty
 from build.preprocess import preprocess_all, preprocess_one
 from build.markdown_to_html import render_markdown_to_html
 from build.template import wrap_in_document_shell
-
-
-# Optional: only needed for --watch
-try:
-    from watchdog.observers import Observer
-    from watchdog.events import FileSystemEventHandler
-    WATCHDOG_AVAILABLE = True
-except ImportError:
-    WATCHDOG_AVAILABLE = False
+from build.watch import watch_md_dir
 
 
 # ---------------------------------------------------------------------------
@@ -165,67 +157,6 @@ def run_steps(
 
 
 # ---------------------------------------------------------------------------
-# Watch mode
-# ---------------------------------------------------------------------------
-
-class DebouncedRunner:
-    def __init__(self, min_interval_s: float = 0.25) -> None:
-        self.min_interval_s = min_interval_s
-        self._last_run = 0.0
-
-    def should_run(self) -> bool:
-        now = time.time()
-        if now - self._last_run < self.min_interval_s:
-            return False
-        self._last_run = now
-        return True
-
-
-class WatchHandler(FileSystemEventHandler):
-    def __init__(self, on_change, debounce: DebouncedRunner) -> None:
-        super().__init__()
-        self.on_change = on_change
-        self.debounce = debounce
-
-    def on_modified(self, event):
-        if event.is_directory:
-            return
-        p = str(event.src_path).lower()
-        if not p.endswith(".md"):
-            return
-        if self.debounce.should_run():
-            self.on_change()
-
-    # some editors trigger "created" rather than "modified"
-    def on_created(self, event):
-        self.on_modified(event)
-
-
-def watch(
-    *,
-    watch_dir: Path,
-    on_change,
-) -> None:
-    if not WATCHDOG_AVAILABLE:
-        raise RuntimeError("watchdog is not installed. Install it with `pip install watchdog`.")
-
-    print(f"[watch] Watching {watch_dir} for .md changes...")
-    debounce = DebouncedRunner()
-    handler = WatchHandler(on_change, debounce)
-
-    observer = Observer()
-    observer.schedule(handler, str(watch_dir), recursive=False)
-    observer.start()
-
-    try:
-        while True:
-            observer.join(1)
-    except KeyboardInterrupt:
-        observer.stop()
-    observer.join()
-
-
-# ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
@@ -319,7 +250,7 @@ def main() -> int:
             watch_dir = src_dir
 
         try:
-            watch(watch_dir=watch_dir, on_change=run_now)
+            watch_md_dir(watch_dir, run_now)
         except Exception as exc:
             print(f"[watch] ERROR: {exc}", file=sys.stderr)
             return 2

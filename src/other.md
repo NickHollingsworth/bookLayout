@@ -1,6 +1,6 @@
 [[page]]
 
-# OTHER.MD - Page one one
+# OTHER MD - Page one other
 
 Lorem ipsum dolor sit amet, consectetur adipiscing elit. 
 Sed non risus. Suspendisse lectus tortor, dignissim sit amet, 
