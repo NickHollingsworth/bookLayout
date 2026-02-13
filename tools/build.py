@@ -36,92 +36,10 @@ from pathlib import Path
 
 from build.config import BuildConfig, load_build_config, require_nonempty
 from build.preprocess import preprocess_all, preprocess_one
-from build.markdown_to_html import render_markdown_to_html
-from build.template import wrap_in_document_shell
+from build.render import render_all, render_one
+#from build.markdown_to_html import render_markdown_to_html
+#from build.template import wrap_in_document_shell
 from build.watch import watch_md_dir
-
-
-# ---------------------------------------------------------------------------
-# IO helpers
-# ---------------------------------------------------------------------------
-
-def read_text_file(path: Path) -> str:
-    return path.read_text(encoding="utf-8")
-
-
-def write_text_file(path: Path, content: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content, encoding="utf-8")
-
-
-def list_md_files(dir_path: Path) -> list[Path]:
-    return sorted(dir_path.glob("*.md"))
-
-
-# ---------------------------------------------------------------------------
-# Step 2: render
-# ---------------------------------------------------------------------------
-
-def derive_title_from_markdown(markdown_text: str, default: str) -> str:
-    for line in markdown_text.splitlines():
-        stripped = line.strip()
-        if not stripped.startswith("#"):
-            continue
-        m = re.match(r"^#+\s+(.*)$", stripped)
-        if not m:
-            continue
-        heading = re.sub(r"\s+#+\s*$", "", m.group(1).strip()).strip()
-        if heading:
-            return heading
-    return default
-
-
-def render_all(
-    preprocess_dir: Path,
-    build_dir: Path,
-    css_href: str,
-    js_href: str,
-    template_path: Path,
-) -> int:
-    md_files = list_md_files(preprocess_dir)
-    if not md_files:
-        print(f"[build] No .md files found in: {preprocess_dir}")
-        return 0
-
-    for md_path in md_files:
-        render_one(md_path, build_dir, css_href, js_href, template_path)
-    return 0
-
-
-def render_one(
-    md_path: Path,
-    build_dir: Path,
-    css_href: str,
-    js_href: str,
-    template_path: Path,
-) -> Path:
-    if not md_path.exists():
-        raise FileNotFoundError(f"Markdown file not found: {md_path}")
-
-    rel_name = md_path.stem
-    out_path = build_dir / f"{rel_name}.html"
-
-    print(f"[build] {md_path} -> {out_path}")
-
-    raw_text = read_text_file(md_path)
-    body_html = render_markdown_to_html(raw_text)
-    title = derive_title_from_markdown(raw_text, default=rel_name)
-
-    full_html = wrap_in_document_shell(
-        body_html=body_html,
-        title=title,
-        css_href=css_href,
-        js_href=js_href,
-        template_path=template_path,
-    )
-
-    write_text_file(out_path, full_html)
-    return out_path
 
 
 # ---------------------------------------------------------------------------
