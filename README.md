@@ -114,5 +114,5 @@ Then in your browser:
 
 Stable (no auto-reload): http://localhost:8000/build/content.html
 
-Dev mode (auto-reload, scroll preserved): http://localhost:8000/build/content.html?dev=1
+Dev mode (auto-reload, scroll preserved): http://localhost:8000/build/content.html?reload=5
 

@@ -1,3 +1,4 @@
+add avaliation that no html comes imediatly before markdown (how would it know) or have a stadard write markdown block that always inserts a blank line at end.
 preprocess directives with
 quotes tripple or somthing so replacement text can be more than one line.
 arguments positional
