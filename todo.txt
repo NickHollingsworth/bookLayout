@@ -1,75 +1,17 @@
-Now i am ready to have a preprocessor that takes a [[page]] directive in a markdown file and creates a new markdown file with the section relevant start and end html added to it. 
+preprocess directives with
+quotes tripple or somthing so replacement text can be more than one line.
+arguments positional
+named arguments so can provide some args in any order, will need defaulsterror if they dont have one
+files must work where the replacement is in a file
 
-Ppppplease
-
-strip out all constants from build.py into a constants file that build py uses
-
-strip out args and watcher functions?
-
-make a preprocessor that initially just copies md fom src to tmp/step-1-enhanced-md
-
----
-the split up:
-
-tools/build/.
-
-1) tools/build.py (thin CLI + orchestration)
-Responsibilities:
-parse args
-load config + merge overrides
-call run_preprocess(), run_render_html(), later run_pdf()
-handle exit codes and top-level error messages
-
-This should become small (≈100–150 lines).
-
-2) tools/buildsys/config.py
-Responsibilities:
-parse your plain-text key = value config
-dataclass for config
-validation helpers (require_nonempty)
-path resolution helpers (optionally)
-
-3) tools/buildsys/markdown_render.py
-Responsibilities:
-create markdown-it parser
-render_markdown_to_html(text)
-
-4) tools/buildsys/template.py
-Responsibilities:
-load template
-fill placeholders
-provide clear errors if placeholders missing
-
-5) tools/buildsys/io_utils.py
-Responsibilities:
-read/write text
-glob sources
-ensure dirs
-
-6) tools/buildsys/watch.py
-Responsibilities:
-watchdog handler that calls a provided callback like rebuild(name=None)
-no knowledge of markdown/rendering; only “on change, call this function”
-
-7) Later: tools/buildsys/preprocess.py
-Responsibilities:
-purely “markdown text → enhanced markdown text”
-page directives, substitutions, reordering, etc.
-unit-testable without filesystem
-
-8) Later: tools/buildsys/pdf_render.py
-Responsibilities:
-invoke headless Chrome to print to PDF
-gather stdout/stderr, return exit codes
-
-9) Later: tools/buildsys/layout_check.py
-Responsibilities:
-run overflow detection headlessly
-emit JSON report
-fail build on violations
-
----
-
+get the chat to give a prompt for the next chat that covers
+objective
+preferences
+testability
+readability
+ask how i give it code
+summarise what we discussed about the grid
+checkin with other cats
 
 make a clean arg that empties step 1 and step 2 directories
 
