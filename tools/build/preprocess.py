@@ -26,9 +26,19 @@ def _parse_subst_config(config_path: Path) -> dict[str, SubstitutionRule]:
     """
     Parse a simple substitutions config file.
 
-    Format:
-      [[TOKEN]] = replacement text
-      [[TOKEN]] = @file:relative/path.html
+    Supported formats:
+
+      1) Single-line:
+         [[TOKEN]] = replacement text
+
+      2) Include file:
+         [[TOKEN]] = @file:relative/path.html
+
+      3) Fenced multi-line (verbatim):
+         [[TOKEN]] = ```html
+         <div>...</div>
+         ```
+         (closing fence must be exactly ``` on its own line)
 
     Rules:
       - blank lines ignored
@@ -36,6 +46,7 @@ def _parse_subst_config(config_path: Path) -> dict[str, SubstitutionRule]:
       - split on first '='
       - key/value trimmed
       - duplicates are errors
+      - unknown directives in Markdown are NOT touched here (only configured tokens are replaced)
     """
     if not config_path.exists():
         return {}
@@ -44,13 +55,22 @@ def _parse_subst_config(config_path: Path) -> dict[str, SubstitutionRule]:
     base_dir = config_path.parent
 
     lines = config_path.read_text(encoding="utf-8").splitlines()
-    for lineno, raw in enumerate(lines, start=1):
+    i = 0
+
+    while i < len(lines):
+        raw = lines[i]
+        lineno = i + 1
         line = raw.strip()
+
+        # Skip comments / blanks
         if not line or line.startswith("#"):
+            i += 1
             continue
 
         if "=" not in line:
-            raise ValueError(f"{config_path}:{lineno}: expected '[[TOKEN]] = replacement' (missing '='): {raw!r}")
+            raise ValueError(
+                f"{config_path}:{lineno}: expected '[[TOKEN]] = replacement' (missing '='): {raw!r}"
+            )
 
         key, value = line.split("=", 1)
         token = key.strip()
@@ -60,26 +80,65 @@ def _parse_subst_config(config_path: Path) -> dict[str, SubstitutionRule]:
             raise ValueError(f"{config_path}:{lineno}: empty token in line: {raw!r}")
         if rhs == "":
             raise ValueError(f"{config_path}:{lineno}: empty replacement for token {token!r}")
-
         if token in rules:
             raise ValueError(f"{config_path}:{lineno}: duplicate token {token!r}")
 
+        # ------------------------------------------------------------------
+        # Multi-line fenced form: [[TOKEN]] = ```lang
+        # ------------------------------------------------------------------
+        if rhs.startswith("```"):
+            fence_open_lineno = lineno  # for error reporting
+            # ignore optional language hint after opening backticks
+            i += 1  # move to first content line after opening fence
+
+            block_lines: list[str] = []
+            while i < len(lines):
+                # Closing fence must be exactly ``` on its own line (no spaces)
+                if lines[i] == "```":
+                    break
+                block_lines.append(lines[i])  # verbatim (no stripping)
+                i += 1
+
+            if i >= len(lines):
+                raise ValueError(
+                    f"{config_path}:{fence_open_lineno}: unterminated fenced block for token {token!r} "
+                    f"(expected closing line ```)"
+                )
+
+            replacement = "\n".join(block_lines)
+            i += 1  # consume closing fence line
+
+            rules[token] = SubstitutionRule(token=token, replacement=replacement)
+            continue
+
+        # ------------------------------------------------------------------
+        # Include file form
+        # ------------------------------------------------------------------
         if rhs.startswith("@file:"):
-            rel = rhs[len("@file:"):].strip()
+            rel = rhs[len("@file:") :].strip()
             if not rel:
                 raise ValueError(f"{config_path}:{lineno}: @file: requires a path for token {token!r}")
 
             inc_path = (base_dir / rel).resolve()
             if not inc_path.exists():
-                raise FileNotFoundError(f"{config_path}:{lineno}: include file not found for {token!r}: {inc_path}")
+                raise FileNotFoundError(
+                    f"{config_path}:{lineno}: include file not found for {token!r}: {inc_path}"
+                )
 
             replacement = inc_path.read_text(encoding="utf-8")
-        else:
-            replacement = rhs
+            rules[token] = SubstitutionRule(token=token, replacement=replacement)
+            i += 1
+            continue
 
-        rules[token] = SubstitutionRule(token=token, replacement=replacement)
+        # ------------------------------------------------------------------
+        # Single-line form
+        # ------------------------------------------------------------------
+        rules[token] = SubstitutionRule(token=token, replacement=rhs)
+        i += 1
 
     return rules
+
+
 
 def apply_sed_like_substitutions(md_text: str, rules: dict[str, SubstitutionRule]) -> str:
 

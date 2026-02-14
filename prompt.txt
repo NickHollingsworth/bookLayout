@@ -1,0 +1,92 @@
+I am building a long-form, print-oriented document pipeline that goes:
+Markdown → enhanced Markdown (preprocess) → HTML → browser print-to-PDF
+
+What I am trying to achieve
+. Author in plain Markdown (GitHub-flavoured, markdown-it) with directives.
+
+currently i have a python build script that will
+. preprocess this markdown to replace the directives with html snippets that enhance the markdown.
+. Convert ithe resulting enhanced markdown to HTML using markdown-it.
+
+Later i willextend this to
+. render to PDF using Chrome print-to-PDF (no paged engines like Vivliostyle).
+
+Final goal: predictable, fixed-layout pages suitable for book-style printing.
+using python, markdown packages, css and chrome browser to turn the markdown into paged media and then print to pdf.
+
+Preprocessor design (current state)
+Preprocessor runs before Markdown parsing.
+Performs Simple token substitutions (sed-like, global replace):
+Defined in a plain-text config file of the form:
+	[[TOKEN]] = replacement
+	or
+	[[TOKEN]] = @file:path/to/snippet.html
+also performs Structural directives implemented in code, currently:
+	[[page]] → splits content into <section class="page" data-page="N"> … </section>
+
+I strongly prefer:
+. Small functions
+. Clear meaningful naming
+. Explicit error handling
+. No magic
+. Readability over cleverness
+. Focus on maintainability, readability, simplicity and long-term maintainability
+
+CSS / layout philosophy (important to preserve)
+. I want fixed, deterministic print layout, not responsive layout.
+. Pages are explicit containers (.page) with fixed physical size (mm / pt).
+. Use CSS Grid as a coordinate system, not for flow:
+. Fixed rows and columns.
+. Grid defines where content may go, not how it auto-flows.
+. No flexbox, no auto layout, no min/max sizing.
+. No transforms for positioning.
+
+Typography is explicit:
+. Fixed font sizes, line heights.
+. Overflow is an error, not something the browser fixes.
+. Plan to detect overflow via JS (e.g. scrollHeight > clientHeight) and fail the build or highlight the box.
+
+Screen rendering should mirror print layout exactly; screen CSS only adds guides/debug overlays.
+
+What I want help with next
+. Continuing to evolve the preprocessor safely.
+. Validation strategies that catch layout-breaking cases early.
+. Designing CSS Grid page templates (1-column, 2-column, sidebar, image blocks).
+. JS-based overflow detection and reporting (with page numbers).
+
+Assume this is running on Linux with Python 3 and a venv virtual environment.
+
+Fixed-layout, manual DTP-style workflow. No responsive layout, no automatic text flow, no pagination decisions by the browser.
+Each page is an explicit fixed-size canvas (A4/A5), identical on screen and in PDF.
+Use CSS only in a deterministic, declarative way:
+CSS Grid as a coordinate system (fixed columns, fixed row/baseline).
+Physical units (mm/pt).
+Padding only for spacing, not margins.
+Overflow is an error to be detected, not auto-fixed.
+Avoid flexbox, auto sizing, transforms, columns, content-driven layout.
+Page layout is defined once via a base grid. Different page types reuse that grid via named regions/presets.
+
+Human Writers indicate intent using loud bracketed directives in their markdown (editorial style), e.g.:
+[[PAGE: feature]]
+[[SIDEBAR]] … [[END SIDEBAR]]
+[[NOTE: …]]
+[[BLOCK: StatBlock …]]
+these get used and replaced by the preprocessor
+Some directives generate visible content (sidebars, callouts); others are metadata collected and rendered later (footnotes, glossary, index, cross-refs).
+
+Reading order must always match DOM order to preserve PDF text selection.
+
+all markdown, configuration, templates etc must be Version-control friendly (git)
+
+Chrome is the canonical renderer; PDF is the final artefact.
+
+I want advice, designs, and examples that respect these constraints and do not assume responsive web layout, paged-media engines, or DTP tools.
+
+Preferred approach
+Use semantic class names in the source and style them in CSS later.
+You already have a stable mechanism to attach .class / #id to blocks and inline elements in Markdown.
+
+respect these constraints and do not assume responsive web layout, paged-media engines, or DTP tools.
+
+i am working in markdown, python3, css and html with a minimal amount of js on an ubuntu linux laptop
+

@@ -3,9 +3,12 @@
 Lorem ipsum dolor sit amet, consectetur adipiscing elit. 
 Sed non risus. Suspendisse lectus tortor, dignissim sit amet, 
 adipiscing nec, ultricies sed, dolor.
-# test 1
 
-# test 2
+[[EXAMPLE]]
+
+[[FENCED_EXAMPLE]]
+
+# test
 
 Proin porttitor, orci nec nonummy molestie, enim est eleifend mi, 
 non fermentum diam nisl sit amet erat.
