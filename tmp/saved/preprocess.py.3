@@ -4,12 +4,13 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from tools.build import terminal
-
 PAGE_DIRECTIVE = "[[page]]"
 DEFAULT_SUBST_CONFIG = Path("tools/preprocess.conf")
 
+# Matches a whole-line directive of the form [[SOMETHING]]
 WHOLE_LINE_DIRECTIVE_RE = re.compile(r"^\s*(\[\[[^\]]+\]\])\s*$")
+
+# ${name} placeholders in directive templates
 PLACEHOLDER_RE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
 
 
@@ -19,6 +20,11 @@ PLACEHOLDER_RE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
 
 @dataclass(frozen=True)
 class SubstitutionRule:
+    """
+    Simple literal token replacement rule:
+      token -> replacement
+    Used for global (sed-like) replacement, e.g. [[EXAMPLE]] anywhere.
+    """
     token: str
     replacement: str
 
@@ -32,15 +38,13 @@ class ParamSpec:
 
 @dataclass(frozen=True)
 class DirectiveRule:
+    """
+    Whole-line directive expansion rule with optional named/positional args:
+      [[NAME, a, b="default"]] expands to template with ${a} placeholders.
+    """
     name: str
     params: list[ParamSpec]
     template: str
-
-
-@dataclass(frozen=True)
-class PreprocessOptions:
-    continue_on_error: bool = False
-    embed_errors: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -52,32 +56,22 @@ def list_md_files(dir_path: Path) -> list[Path]:
 
 
 # ---------------------------------------------------------------------------
-# Embedded error formatting (Markdown-visible)
-# ---------------------------------------------------------------------------
-
-def _format_embedded_error(where: str, message: str) -> str:
-    one_line = " ".join(message.splitlines()).strip()
-    return "\n".join([
-        "> **BUILD ERROR**",
-        f"> **Where:** {where}",
-        f"> **Message:** {one_line}",
-        "> (directive left unchanged)",
-        ""
-    ])
-
-
-# ---------------------------------------------------------------------------
-# CSV-ish parsing helpers
+# CSV-ish parsing helpers (commas, quotes)
 # ---------------------------------------------------------------------------
 
 def _split_csvish(text: str, *, where: str) -> list[str]:
     """
     Split a comma-separated string into tokens, respecting double quotes.
 
-    - commas inside double quotes do not split
-    - supports escapes inside quotes: \" and \\ only
-    - trims whitespace around tokens
-    - empty tokens are errors
+    Examples:
+      'a, b, c' -> ['a', 'b', 'c']
+      'a, "beta gamma", x=y' -> ['a', 'beta gamma', 'x=y']
+
+    Rules:
+      - commas inside double quotes do not split
+      - supports escapes inside quotes: \" and \\ only
+      - trims whitespace around tokens
+      - empty tokens are errors (e.g. "a,,b")
     """
     tokens: list[str] = []
     buf: list[str] = []
@@ -94,6 +88,7 @@ def _split_csvish(text: str, *, where: str) -> list[str]:
         if in_quotes:
             if escape:
                 if ch not in ['"', '\\']:
+                    # preserve unknown escapes literally
                     buf.append("\\")
                 buf.append(ch)
                 escape = False
@@ -109,6 +104,7 @@ def _split_csvish(text: str, *, where: str) -> list[str]:
             buf.append(ch)
             continue
 
+        # not in quotes
         if ch == '"':
             in_quotes = True
             continue
@@ -121,7 +117,7 @@ def _split_csvish(text: str, *, where: str) -> list[str]:
         buf.append(ch)
 
     if escape:
-        buf.append("\\")
+        buf.append("\\")  # dangling backslash, keep literal
 
     if in_quotes:
         raise ValueError(f"{where}: unterminated double quote in list")
@@ -145,6 +141,13 @@ def _strip_outer_brackets(directive_text: str, *, where: str) -> str:
 # ---------------------------------------------------------------------------
 
 def _parse_signature_lhs(lhs: str, *, where: str) -> tuple[str, list[ParamSpec]]:
+    """
+    Parse config LHS of the form:
+      [[NAME]]
+      [[NAME, a, b="x", c="y z"]]
+
+    Returns (NAME, params).
+    """
     inner = _strip_outer_brackets(lhs, where=where)
     parts = _split_csvish(inner, where=where)
 
@@ -190,6 +193,15 @@ def _parse_signature_lhs(lhs: str, *, where: str) -> tuple[str, list[ParamSpec]]
 
 
 def _parse_invocation(inner: str, *, where: str) -> tuple[str, list[str], dict[str, str]]:
+    """
+    Parse Markdown invocation inner text (no outer [[ ]]):
+
+      NAME
+      NAME, aaaa, third=bbbb
+      NAME, third="beta gamma", first=aaaa
+
+    Returns (name, positional_values, named_values).
+    """
     parts = _split_csvish(inner, where=where)
     name = parts[0].strip()
     if not name:
@@ -221,7 +233,8 @@ def _parse_invocation(inner: str, *, where: str) -> tuple[str, list[str], dict[s
 # ---------------------------------------------------------------------------
 
 def _resolve_args(rule: DirectiveRule, positional: list[str], named: dict[str, str], *, where: str) -> dict[str, str]:
-    param_set = {p.name for p in rule.params}
+    param_names = [p.name for p in rule.params]
+    param_set = set(param_names)
 
     unknown = sorted(set(named.keys()) - param_set)
     if unknown:
@@ -230,7 +243,7 @@ def _resolve_args(rule: DirectiveRule, positional: list[str], named: dict[str, s
     resolved: dict[str, str] = {}
     assigned: set[str] = set()
 
-    # Defaults
+    # Defaults first
     for p in rule.params:
         if not p.required and p.default is not None:
             resolved[p.name] = p.default
@@ -240,7 +253,7 @@ def _resolve_args(rule: DirectiveRule, positional: list[str], named: dict[str, s
         resolved[k] = v
         assigned.add(k)
 
-    # Positional fill, skipping named-assigned params
+    # Positional fill in signature order, skipping named-assigned params
     pos_i = 0
     for p in rule.params:
         if pos_i >= len(positional):
@@ -283,7 +296,7 @@ def _substitute_placeholders(template: str, values: dict[str, str], *, where: st
 
 
 # ---------------------------------------------------------------------------
-# Whole-line directive expansion
+# Whole-line directive expansion pass
 # ---------------------------------------------------------------------------
 
 def expand_whole_line_directives(
@@ -291,21 +304,17 @@ def expand_whole_line_directives(
     directive_rules: dict[str, DirectiveRule],
     *,
     source_path: Path | None = None,
-    options: PreprocessOptions = PreprocessOptions(),
-) -> tuple[str, int]:
+) -> str:
     """
-    Expand only whole-line directives.
+    Expand only whole-line directives in Markdown.
 
-    - Recognized directive names expand.
-    - Unrecognized directives are left unchanged.
-    - On error:
-        * if options.continue_on_error: print error, optionally embed it, leave directive unchanged, continue
-        * else: raise
-    Returns (expanded_text, error_count).
+    - A "directive line" is a line whose trimmed content matches [[...]] exactly.
+    - If directive name is recognized (exists in directive_rules), expand it.
+    - If directive name is unrecognized, leave the line unchanged.
+    - Parsing/argument errors for recognized directives raise with file:line context.
     """
     lines = md_text.splitlines()
     out: list[str] = []
-    errors = 0
 
     for lineno, line in enumerate(lines, start=1):
         m = WHOLE_LINE_DIRECTIVE_RE.match(line)
@@ -316,45 +325,35 @@ def expand_whole_line_directives(
         directive_text = m.group(1)
         where = f"{source_path}:{lineno}" if source_path else f"line {lineno}"
 
-        try:
-            inner = _strip_outer_brackets(directive_text, where=where)
-            name, positional, named = _parse_invocation(inner, where=where)
+        inner = _strip_outer_brackets(directive_text, where=where)
+        name, positional, named = _parse_invocation(inner, where=where)
 
-            rule = directive_rules.get(name)
-            if rule is None:
-                out.append(line)  # unrecognized -> unchanged
-                continue
+        rule = directive_rules.get(name)
+        if rule is None:
+            out.append(line)
+            continue
 
-            values = _resolve_args(rule, positional, named, where=where)
-            expanded = _substitute_placeholders(rule.template, values, where=where)
-            out.extend(expanded.splitlines())
+        values = _resolve_args(rule, positional, named, where=where)
+        expanded = _substitute_placeholders(rule.template, values, where=where)
+        out.extend(expanded.splitlines())
 
-        except Exception as exc:
-            errors += 1
-            terminal.error(f"[preprocess] ERROR {where}: {exc}")
-
-            if options.embed_errors:
-                out.extend(_format_embedded_error(where, str(exc)).splitlines())
-
-            out.append(line)  # directive left as-is
-
-            if not options.continue_on_error:
-                raise
-
-    result = "\n".join(out) + ("\n" if md_text.endswith("\n") else "")
-    return result, errors
+    return "\n".join(out) + ("\n" if md_text.endswith("\n") else "")
 
 
 # ---------------------------------------------------------------------------
-# Config parsing
+# Config parsing (supports single-line, @file:, fenced multi-line, signatures)
 # ---------------------------------------------------------------------------
 
 def _split_config_assignment(line: str, *, where: str) -> tuple[str, str]:
     """
     Split a config assignment line into (lhs, rhs) where lhs is the first [[...]] block.
 
-    Avoids breaking on '=' used inside defaults in the LHS signature, e.g.:
+    This avoids breaking on '=' used inside defaults in the LHS signature, e.g.:
       [[NAME, b="alpha"]] = template
+
+    Requirements:
+      - the line must contain a ']]' ending the LHS
+      - the first non-space characters after that must be '='
     """
     close = line.find("]]")
     if close == -1:
@@ -375,11 +374,32 @@ def _split_config_assignment(line: str, *, where: str) -> tuple[str, str]:
 
 def _parse_subst_config(config_path: Path) -> tuple[dict[str, SubstitutionRule], dict[str, DirectiveRule]]:
     """
-    Returns (subst_rules, directive_rules).
+    Parse tools/preprocess.conf and return (subst_rules, directive_rules).
 
-    - directive_rules: name -> DirectiveRule (supports args, expands whole-line only)
-    - subst_rules: token -> SubstitutionRule for exact [[NAME]] tokens where NAME has no params
-      (global replacement, backward-compatible)
+    Supported formats:
+
+      1) Simple literal token substitution (global replace):
+         [[TOKEN]] = replacement text
+         [[TOKEN]] = @file:relative/path.html
+         [[TOKEN]] = ```html
+         <div>...</div>
+         ```
+
+         These create:
+           subst_rules["[[TOKEN]]"] = SubstitutionRule(...)
+           directive_rules["TOKEN"] = DirectiveRule(name="TOKEN", params=[], template=...)
+
+      2) Argument-capable directive (whole-line expansion only):
+         [[NAME, first, second="alpha", third="beta gamma"]] = template with ${first}
+
+         These create:
+           directive_rules["NAME"] = DirectiveRule(name="NAME", params=[...], template=...)
+
+    Notes:
+      - Blank lines and # comments are ignored.
+      - Duplicate directive names are errors (for directive_rules).
+      - Duplicate literal tokens are errors (for subst_rules).
+      - Unknown directives in Markdown are not touched; only names present in directive_rules expand.
     """
     if not config_path.exists():
         return {}, {}
@@ -397,34 +417,42 @@ def _parse_subst_config(config_path: Path) -> tuple[dict[str, SubstitutionRule],
         line = raw.strip()
         where = f"{config_path}:{lineno}"
 
+        # Skip comments / blanks
         if not line or line.startswith("#"):
             i += 1
             continue
 
         lhs, rhs = _split_config_assignment(line, where=where)
+
+        # Parse the LHS signature: [[NAME, ...]]
         name, params = _parse_signature_lhs(lhs, where=where)
 
+        # -------------------------
         # RHS: fenced multi-line
+        # -------------------------
         if rhs.startswith("```"):
             open_lineno = lineno
-            i += 1
+            i += 1  # move to first content line after opening fence
             block_lines: list[str] = []
 
             while i < len(lines):
                 if lines[i] == "```":
                     break
-                block_lines.append(lines[i])
+                block_lines.append(lines[i])  # verbatim
                 i += 1
 
             if i >= len(lines):
                 raise ValueError(
-                    f"{config_path}:{open_lineno}: unterminated fenced block for {lhs!r} (expected closing line ```)"
+                    f"{config_path}:{open_lineno}: unterminated fenced block for {lhs!r} "
+                    f"(expected closing line ```)"
                 )
 
             template = "\n".join(block_lines)
             i += 1  # consume closing fence
 
+        # -------------------------
         # RHS: @file include
+        # -------------------------
         elif rhs.startswith("@file:"):
             rel = rhs[len("@file:"):].strip()
             if not rel:
@@ -437,17 +465,21 @@ def _parse_subst_config(config_path: Path) -> tuple[dict[str, SubstitutionRule],
             template = inc_path.read_text(encoding="utf-8")
             i += 1
 
+        # -------------------------
         # RHS: single-line
+        # -------------------------
         else:
             template = rhs
             i += 1
 
+        # Build directive rule
         if name in directive_rules:
             raise ValueError(f"{config_path}:{lineno}: duplicate directive name {name!r}")
 
         directive_rules[name] = DirectiveRule(name=name, params=params, template=template)
 
-        # Back-compat: zero-arg directives also become simple literal tokens [[NAME]]
+        # If it's a zero-arg signature, also provide the legacy literal-token substitution
+        # for the exact token form [[NAME]].
         if not params:
             token = f"[[{name}]]"
             if token in subst_rules:
@@ -462,6 +494,10 @@ def _parse_subst_config(config_path: Path) -> tuple[dict[str, SubstitutionRule],
 # ---------------------------------------------------------------------------
 
 def apply_sed_like_substitutions(md_text: str, rules: dict[str, SubstitutionRule]) -> str:
+    """
+    Simple global string substitution. Only configured literal tokens are replaced.
+    Unknown directive-looking strings remain unchanged.
+    """
     if not rules:
         return md_text
 
@@ -469,34 +505,44 @@ def apply_sed_like_substitutions(md_text: str, rules: dict[str, SubstitutionRule
     for token, rule in rules.items():
         out = out.replace(token, rule.replacement)
 
-    # Preserve internal whitespace; normalize EOF to no trailing whitespace.
+    # Keep trailing newline stable for diffs (note: this removes *all* trailing whitespace)
     return out.rstrip()
 
 
 # ---------------------------------------------------------------------------
-# Page directive handling
+# Existing page directive handling
 # ---------------------------------------------------------------------------
 
 def preprocess_text_add_pages(md_text: str) -> str:
+    """
+    Convert [[page]] directives into <section class="page" ...> wrappers.
+
+    Ensures blank lines around HTML block boundaries so Markdown parses correctly.
+    """
     lines = md_text.splitlines()
     out: list[str] = []
 
     page_num = 1
+
+    # Open first page
     out.append(f'<section class="page" data-page="{page_num}">')
-    out.append("")
+    out.append("")  # blank line to end HTML block
 
     for line in lines:
         if line.strip() == PAGE_DIRECTIVE:
+            # Close current page
             out.append("")
             out.append("</section>")
             out.append("")
 
+            # Open next page
             page_num += 1
             out.append(f'<section class="page" data-page="{page_num}">')
             out.append("")
         else:
             out.append(line)
 
+    # Close final page
     out.append("")
     out.append("</section>")
 
@@ -507,70 +553,51 @@ def preprocess_text_add_pages(md_text: str) -> str:
 # Orchestration
 # ---------------------------------------------------------------------------
 
-def preprocess_file(src_path: Path, dst_path: Path, *, options: PreprocessOptions) -> int:
+def preprocess_file(src_path: Path, dst_path: Path) -> None:
     if not src_path.exists():
         raise FileNotFoundError(f"Markdown file not found: {src_path}")
 
     raw = src_path.read_text(encoding="utf-8")
 
+    # Load config rules
     subst_rules, directive_rules = _parse_subst_config(DEFAULT_SUBST_CONFIG)
 
-    enhanced, errors = expand_whole_line_directives(
-        raw,
-        directive_rules,
-        source_path=src_path,
-        options=options,
-    )
+    # Step A: expand whole-line directives (argument-capable)
+    enhanced = expand_whole_line_directives(raw, directive_rules, source_path=src_path)
 
+    # Step B: simple config-driven literal substitutions (global)
     enhanced = apply_sed_like_substitutions(enhanced, subst_rules)
+
+    # Step C: structural directives (code handlers)
     enhanced = preprocess_text_add_pages(enhanced)
 
     dst_path.parent.mkdir(parents=True, exist_ok=True)
     dst_path.write_text(enhanced, encoding="utf-8")
-    return errors
 
 
-def preprocess_all(
-    src_dir: Path,
-    preprocess_dir: Path,
-    *,
-    continue_on_error: bool = False,
-    embed_errors: bool = False,
-) -> int:
+def preprocess_all(src_dir: Path, preprocess_dir: Path) -> int:
     md_files = list_md_files(src_dir)
     if not md_files:
-        terminal.error(f"[preprocess] No .md files found in: {src_dir}")
+        print(f"[preprocess] No .md files found in: {src_dir}")
         return 0
 
-    options = PreprocessOptions(continue_on_error=continue_on_error, embed_errors=embed_errors)
-
     preprocess_dir.mkdir(parents=True, exist_ok=True)
-    errors = 0
-
     for src in md_files:
         dst = preprocess_dir / src.name
-        terminal.info(f"[preprocess] {src} -> {dst}")
-        errors += preprocess_file(src, dst, options=options)
+        print(f"[preprocess] {src} -> {dst}")
+        preprocess_file(src, dst)
 
-    return errors
+    return 0
 
 
-def preprocess_one(
-    src_dir: Path,
-    preprocess_dir: Path,
-    name: str,
-    *,
-    continue_on_error: bool = False,
-    embed_errors: bool = False,
-) -> int:
+def preprocess_one(src_dir: Path, preprocess_dir: Path, name: str) -> int:
     src = src_dir / f"{name}.md"
     if not src.exists():
         raise FileNotFoundError(f"Markdown file not found: {src}")
 
-    options = PreprocessOptions(continue_on_error=continue_on_error, embed_errors=embed_errors)
-
     preprocess_dir.mkdir(parents=True, exist_ok=True)
     dst = preprocess_dir / src.name
-    terminal.info(f"[preprocess] {src} -> {dst}")
-    return preprocess_file(src, dst, options=options)
+    print(f"[preprocess] {src} -> {dst}")
+    preprocess_file(src, dst)
+    return 0
 

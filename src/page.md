@@ -8,6 +8,16 @@ adipiscing nec, ultricies sed, dolor.
 
 [[FENCED_EXAMPLE]]
 
+[[EXAMPLE_WITH_ARGS, 1111, third=3333]]
+
+this next one should fail with missing mandatory argument:
+[[EXAMPLE_WITH_ARGS]]
+
+[[EXAMPLE_WITH_ARGS, third=3333, first=1111]] 
+
+a second fail to test the 'continue anyway' arg
+[[EXAMPLE_WITH_ARGS]]
+
 # test
 
 Proin porttitor, orci nec nonummy molestie, enim est eleifend mi, 

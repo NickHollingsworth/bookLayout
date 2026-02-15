@@ -7,6 +7,7 @@ from .io_utils import read_text_file, write_text_file, list_md_files
 from .markdown_to_html import render_markdown_to_html
 from .template import wrap_in_document_shell
 
+from tools.build import terminal
 
 def derive_title_from_markdown(markdown_text: str, default: str) -> str:
     """
@@ -45,7 +46,7 @@ def render_one(
     rel_name = md_path.stem
     out_path = build_dir / f"{rel_name}.html"
 
-    print(f"[build] {md_path} -> {out_path}")
+    terminal.info(f"[build] {md_path} -> {out_path}")
 
     raw_text = read_text_file(md_path)
     body_html = render_markdown_to_html(raw_text)
@@ -75,7 +76,7 @@ def render_all(
     """
     md_files = list_md_files(preprocess_dir)
     if not md_files:
-        print(f"[build] No .md files found in: {preprocess_dir}")
+        terminal.error(f"[build] No .md files found in: {preprocess_dir}")
         return 0
 
     for md_path in md_files:

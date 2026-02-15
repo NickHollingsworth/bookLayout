@@ -4,6 +4,8 @@ import time
 from pathlib import Path
 from typing import Callable
 
+from tools.build import terminal
+
 # Optional dependency: watchdog (only required for --watch)
 try:
     from watchdog.observers import Observer
@@ -61,7 +63,7 @@ def watch_md_dir(watch_dir: Path, on_change: Callable[[], None]) -> None:
     if not WATCHDOG_AVAILABLE:
         raise RuntimeError("watchdog is not installed. Install it with `pip install watchdog`.")
 
-    print(f"[watch] Watching {watch_dir} for .md changes...")
+    terminal.info(f"[watch] Watching {watch_dir} for .md changes...")
     debounce = DebouncedRunner()
     handler = WatchHandler(on_change, debounce)
 

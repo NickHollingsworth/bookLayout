@@ -1,4 +1,38 @@
-add a valiation that no html comes imediatly before markdown (how would it know) or have a stadard write markdown block that always inserts a blank line at end.
+add a --verbose arg 
+synonym -v
+when set output the info messages that are currently the default (ie current behaviour)
+when not set only output the error messages
+
+give me a document on how to use this. It should cover:
+. how to create a source markdown document, run the builder, start a server to see the results, run in watch mode and the various arguments to the build
+. how to use builtin directive.
+. how to define directives in conf and use them icluding using snippets
+. how to add css styling directly into the document or directives
+. how to setup the project and its directory structure
+
+
+return non zero on fail
+
+source and line in error messages please
+
+[[FOOTNOTE]]jhsxj[[END FOOTNOTE]]
+[[FOOTNOTE, kuhwekjhxe]]
+
+this is true for any directive with an END
+iperhaps there is a secret arg called ${body}
+
+[[NPC, HP=17, AC=12, etc]]
+
+if have unrecognised arg thats an error.
+if i dont have a place to write an arg that might be an error or warning?
+
+verify switch to report al errors
+
+start documentation. perhaps its also useful as a prompt?
+
+activate github ai advisor
+
+will want to do inserts into a doc where another doc or snippet is named or where i name a section in another doc to insert here - i am thinking for monster stats as these get copied.
 
 preprocess directives with
 quotes tripple or somthing so replacement text can be more than one line.
