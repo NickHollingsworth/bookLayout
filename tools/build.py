@@ -98,62 +98,43 @@ def run_steps(
 # ---------------------------------------------------------------------------
 
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(
-        description="Build pipeline: preprocess and/or render HTML."
-    )
-
+    p = argparse.ArgumentParser(description="Build pipeline: preprocess and/or render HTML.")
     p.add_argument("name", nargs="?", help="Optional single file base name (without .md).")
 
-    # Core flags
-    p.add_argument("-w", "--watch", action="store_true",
-                   help="Watch for changes and rebuild.")
-
-    p.add_argument("-v", "--verbose", action="store_true",
-                   help="Verbose output.")
+    p.add_argument("-w", "--watch", action="store_true", help="Watch for changes and rebuild.")
+    p.add_argument("-v", "--verbose", action="store_true", help="Verbose output.")
 
     mode = p.add_mutually_exclusive_group()
-    mode.add_argument("-p", "--preprocess-only", action="store_true",
-                      help="Run preprocess step only.")
-    mode.add_argument("-r", "--render-only", action="store_true",
-                      help="Run render step only.")
+    mode.add_argument("-p", "--preprocess-only", action="store_true", help="Run preprocess step only.")
+    mode.add_argument("-r", "--render-only", action="store_true", help="Run render step only.")
 
-    # Error handling
     p.add_argument("-c", "--continue-on-error", action="store_true",
                    help="Continue after preprocess/directive errors where possible.")
-
     p.add_argument("-e", "--embed-errors", action="store_true",
                    help="Embed preprocess/directive errors into enhanced Markdown output.")
 
-    # Config + overrides
-    p.add_argument("--config", default="tools/build.conf",
-                   help="Path to config file.")
+    p.add_argument("--config", default="tools/build.conf", help="Path to config file.")
 
-    p.add_argument("--src-dir", default=None,
-                   help="Override source directory.")
-    p.add_argument("--preprocess-dir", default=None,
-                   help="Override preprocess output directory.")
-    p.add_argument("--build-dir", default=None,
-                   help="Override HTML output directory.")
-    p.add_argument("--css", default=None,
-                   help="Override CSS href.")
-    p.add_argument("--dev-js", default=None,
-                   help="Override dev reload JS href.")
-    p.add_argument("--template", default=None,
-                   help="Override HTML template path.")
+    # Overrides (CLI wins over config)
+    p.add_argument("--src-dir", default=None, help="Override source directory.")
+    p.add_argument("--preprocess-dir", default=None, help="Override preprocess output directory.")
+    p.add_argument("--build-dir", default=None, help="Override HTML output directory.")
+    p.add_argument("--css", default=None, help="Override CSS href.")
+    p.add_argument("--dev-js", default=None, help="Override dev reload JS href.")
+    p.add_argument("--template", default=None, help="Override HTML template path.")
 
     return p.parse_args()
 
 
 def main() -> int:
     args = parse_args()
-
     terminal.configure(verbose=args.verbose)
 
     # Load config
     try:
         cfg = load_build_config(Path(args.config).resolve())
     except Exception as exc:
-        terminal.error(f"[build] ERROR loading config: {exc}")
+        terminal.error(f"loading config: {exc}", prefix="[build]")
         return 2
 
     # Merge config + CLI
@@ -165,7 +146,7 @@ def main() -> int:
         js_href = require_nonempty("dev_js", args.dev_js or cfg.dev_js)
         template_str = require_nonempty("template", args.template or cfg.template)
     except Exception as exc:
-        terminal.error(f"[build] ERROR: {exc}")
+        terminal.error(str(exc), prefix="[build]")
         return 2
 
     src_dir = Path(src_dir_str).resolve()
@@ -174,7 +155,7 @@ def main() -> int:
     template_path = Path(template_str).resolve()
 
     if not src_dir.exists():
-        terminal.error(f"[build] ERROR: source directory does not exist: {src_dir}")
+        terminal.error(f"source directory does not exist: {src_dir}", prefix="[build]")
         return 2
 
     do_preprocess = not args.render_only
@@ -199,13 +180,13 @@ def main() -> int:
         )
         if errors:
             had_errors = True
-            terminal.error(f"[build] ERROR: {errors} error(s) during preprocess")
+            terminal.error(f"{errors} error(s) during preprocess", prefix="[build]")
 
     # One-shot run
     try:
         run_now()
     except Exception as exc:
-        terminal.error(f"[build] ERROR: {exc}")
+        terminal.error(str(exc), prefix="[build]")
         return 1
 
     # Watch mode
@@ -223,7 +204,7 @@ def main() -> int:
                     run_now()
                 except Exception as exc:
                     # swallow to keep watcher alive
-                    terminal.error(f"[build] ERROR: {exc}")
+                    terminal.error(str(exc), prefix="[build]")
 
             watch_md_dir(watch_dir, run_now_watch)
         else:

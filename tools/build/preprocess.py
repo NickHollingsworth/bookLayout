@@ -71,14 +71,6 @@ def _format_embedded_error(where: str, message: str) -> str:
 # ---------------------------------------------------------------------------
 
 def _split_csvish(text: str, *, where: str) -> list[str]:
-    """
-    Split a comma-separated string into tokens, respecting double quotes.
-
-    - commas inside double quotes do not split
-    - supports escapes inside quotes: \" and \\ only
-    - trims whitespace around tokens
-    - empty tokens are errors
-    """
     tokens: list[str] = []
     buf: list[str] = []
     in_quotes = False
@@ -299,7 +291,7 @@ def expand_whole_line_directives(
     - Recognized directive names expand.
     - Unrecognized directives are left unchanged.
     - On error:
-        * if options.continue_on_error: print error, optionally embed it, leave directive unchanged, continue
+        * if options.continue_on_error: report + leave directive unchanged + continue
         * else: raise
     Returns (expanded_text, error_count).
     """
@@ -331,15 +323,17 @@ def expand_whole_line_directives(
 
         except Exception as exc:
             errors += 1
-            terminal.error(f"[preprocess] ERROR {where}: {exc}")
 
-            if options.embed_errors:
-                out.extend(_format_embedded_error(where, str(exc)).splitlines())
+            if options.continue_on_error:
+                terminal.error(str(exc), where=where, prefix="[preprocess]")
 
-            out.append(line)  # directive left as-is
+                if options.embed_errors:
+                    out.extend(_format_embedded_error(where, str(exc)).splitlines())
 
-            if not options.continue_on_error:
-                raise
+                out.append(line)
+                continue
+
+            raise
 
     result = "\n".join(out) + ("\n" if md_text.endswith("\n") else "")
     return result, errors
@@ -350,12 +344,6 @@ def expand_whole_line_directives(
 # ---------------------------------------------------------------------------
 
 def _split_config_assignment(line: str, *, where: str) -> tuple[str, str]:
-    """
-    Split a config assignment line into (lhs, rhs) where lhs is the first [[...]] block.
-
-    Avoids breaking on '=' used inside defaults in the LHS signature, e.g.:
-      [[NAME, b="alpha"]] = template
-    """
     close = line.find("]]")
     if close == -1:
         raise ValueError(f"{where}: expected directive LHS ending with ']]': {line!r}")
@@ -374,13 +362,6 @@ def _split_config_assignment(line: str, *, where: str) -> tuple[str, str]:
 
 
 def _parse_subst_config(config_path: Path) -> tuple[dict[str, SubstitutionRule], dict[str, DirectiveRule]]:
-    """
-    Returns (subst_rules, directive_rules).
-
-    - directive_rules: name -> DirectiveRule (supports args, expands whole-line only)
-    - subst_rules: token -> SubstitutionRule for exact [[NAME]] tokens where NAME has no params
-      (global replacement, backward-compatible)
-    """
     if not config_path.exists():
         return {}, {}
 
@@ -469,7 +450,6 @@ def apply_sed_like_substitutions(md_text: str, rules: dict[str, SubstitutionRule
     for token, rule in rules.items():
         out = out.replace(token, rule.replacement)
 
-    # Preserve internal whitespace; normalize EOF to no trailing whitespace.
     return out.rstrip()
 
 
@@ -539,7 +519,7 @@ def preprocess_all(
 ) -> int:
     md_files = list_md_files(src_dir)
     if not md_files:
-        terminal.error(f"[preprocess] No .md files found in: {src_dir}")
+        terminal.info(f"No .md files found in: {src_dir}", prefix="[preprocess]")
         return 0
 
     options = PreprocessOptions(continue_on_error=continue_on_error, embed_errors=embed_errors)
@@ -549,7 +529,7 @@ def preprocess_all(
 
     for src in md_files:
         dst = preprocess_dir / src.name
-        terminal.info(f"[preprocess] {src} -> {dst}")
+        terminal.info(f"{src} -> {dst}", prefix="[preprocess]")
         errors += preprocess_file(src, dst, options=options)
 
     return errors
@@ -571,6 +551,6 @@ def preprocess_one(
 
     preprocess_dir.mkdir(parents=True, exist_ok=True)
     dst = preprocess_dir / src.name
-    terminal.info(f"[preprocess] {src} -> {dst}")
+    terminal.info(f"{src} -> {dst}", prefix="[preprocess]")
     return preprocess_file(src, dst, options=options)
 

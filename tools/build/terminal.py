@@ -1,28 +1,32 @@
 """
-Minimal terminal formatting helpers.
+Minimal terminal output helpers.
 
 Design goals:
 - No external dependencies
 - Respect NO_COLOR
 - Only emit ANSI codes when output is a TTY
 - Prefer semantic emphasis (bold + reverse) over hard-coded colours
+- Centralize message composition (prefix/level/where) to avoid duplication
 """
 
 from __future__ import annotations
 
 import os
 import sys
-from typing import TextIO
 from dataclasses import dataclass
+from typing import TextIO
+
 
 @dataclass
 class _TerminalConfig:
     verbose: bool = False
 
+
 _config = _TerminalConfig()
 
+
 def configure(*, verbose: bool) -> None:
-    _config.verbose = verbose
+    _config.verbose = bool(verbose)
 
 
 # ---------------------------------------------------------------------------
@@ -30,62 +34,75 @@ def configure(*, verbose: bool) -> None:
 # ---------------------------------------------------------------------------
 
 def _supports_ansi(stream: TextIO) -> bool:
-    """
-    Return True if we should emit ANSI sequences to this stream.
-    """
     if "NO_COLOR" in os.environ:
         return False
-
     if not stream.isatty():
         return False
-
     term = os.environ.get("TERM")
     if not term or term == "dumb":
         return False
-
     return True
 
 
 def _format_emphasis(msg: str) -> str:
-    """
-    Format a message with bold + reverse video.
-    """
     bold = "\033[1m"
     reverse = "\033[7m"
     reset = "\033[0m"
     return f"{bold}{reverse}{msg}{reset}"
 
 
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
+def _dedupe_where(msg: str, where: str | None) -> str:
+    """
+    If caller passes where=..., avoid output like:
+      WHERE: WHERE: message
+    by stripping one copy from msg if it already begins with it.
+    """
+    if not where:
+        return msg
+    prefix = f"{where}:"
+    if msg.startswith(prefix):
+        # Strip exactly one leading "WHERE:" and optional following whitespace
+        rest = msg[len(prefix):].lstrip()
+        return rest
+    return msg
 
-def info(msg: str) -> None:
-    """
-    Print informational message to stdout.
-    """
-    if _config.verbose:
-        print(msg, file=sys.stdout)
 
-def error(msg: str) -> None:
-    """
-    Print an error message to stderr in highlighted form.
-    """
-    if _supports_ansi(sys.stderr):
-        print(_format_emphasis(msg), file=sys.stderr)
+def _emit(
+    level: str,
+    msg: str,
+    *,
+    where: str | None,
+    prefix: str,
+    stream: TextIO,
+    emphasize: bool,
+) -> None:
+    msg = _dedupe_where(str(msg), where)
+
+    if where:
+        full = f"{prefix} {level} {where}: {msg}"
     else:
-        print(msg, file=sys.stderr)
+        full = f"{prefix} {level}: {msg}"
+
+    if emphasize and _supports_ansi(stream):
+        full = _format_emphasis(full)
+
+    print(full, file=stream)
 
 
-def warn(msg: str) -> None:
-    """
-    Print a warning message to stderr (bold only).
-    """
-    if _supports_ansi(sys.stderr):
-        bold = "\033[1m"
-        reset = "\033[0m"
-        print(f"{bold}{msg}{reset}", file=sys.stderr)
-    else:
-        print(msg, file=sys.stderr)
+# ---------------------------------------------------------------------------
+# Public API (same signature)
+# ---------------------------------------------------------------------------
 
+def error(msg: str, *, where: str | None = None, prefix: str = "[build]") -> None:
+    _emit("ERROR", msg, where=where, prefix=prefix, stream=sys.stderr, emphasize=True)
+
+
+def warn(msg: str, *, where: str | None = None, prefix: str = "[build]") -> None:
+    _emit("WARNING", msg, where=where, prefix=prefix, stream=sys.stderr, emphasize=True)
+
+
+def info(msg: str, *, where: str | None = None, prefix: str = "[build]") -> None:
+    if not _config.verbose:
+        return
+    _emit("INFO", msg, where=where, prefix=prefix, stream=sys.stdout, emphasize=False)
 
