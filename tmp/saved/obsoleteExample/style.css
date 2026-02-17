@@ -1,0 +1,77 @@
+/* 1. LOAD LOCAL FONTS */
+@font-face {
+    font-family: 'Montserrat';
+    src: url('fonts/Montserrat-Regular.ttf') format('truetype');
+    font-weight: normal;
+}
+
+@font-face {
+    font-family: 'JSL Blackletter';
+    src: url('fonts/JSL_Blackletter.ttf') format('truetype');
+}
+
+/* 2. PRINT & PAGE SETUP */
+@page {
+    size: A5;
+    margin: 0;
+}
+
+@media print {
+    .page { page-break-after: always; }
+}
+
+/* 3. BASE STYLES */
+body {
+    margin: 0;
+    padding: 0;
+    /* Apply Montserrat 12pt as global default */
+    font-family: 'Montserrat', sans-serif;
+    font-size: 11pt; 
+    color: #000;
+}
+
+/* Apply JSL Blackletter 24pt to Headings */
+h1, h2, h3 {
+    font-family: 'JSL Blackletter', serif;
+    font-size: 24pt;
+    font-weight: normal;
+    margin-top: 0;
+    line-height: 1.1;
+}
+
+/* 4. PHYSICAL PAGE LAYOUT */
+.page {
+    width: 148mm;
+    height: 210mm;
+    background: white;
+    position: relative;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+/* Mirrored Margins (12.7mm + 5mm Binding Gutter) */
+.page.odd { padding: 12.7mm 12.7mm 12.7mm 17.7mm; }
+.page.even { padding: 12.7mm 17.7mm 12.7mm 12.7mm; }
+
+/* 5. THE TWO-COLUMN GRID */
+.grid-container {
+    display: grid;
+    grid-template-columns: 56.7mm 56.7mm;
+    grid-column-gap: 4.2mm;
+    height: 184.6mm;
+}
+
+.column {
+    text-align: justify;
+    line-height: 1.5; /* Adjust based on your baseline measurement */
+}
+
+.footer {
+    position: absolute;
+    bottom: 6mm;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-size: 10pt;
+}
+

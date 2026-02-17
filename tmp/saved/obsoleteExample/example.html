@@ -12,11 +12,6 @@
 
     <!-- Page 1: Right-hand (Odd) -->
     <div class="page odd">
-		<div class="result-layer"></div>
-		<div class="guide-layer"></div>
-		<div class="mockup-layer"></div>
-		<div class="white-layer"></div>
-
         <div class="grid-container">
             <div class="column left-col">
 
@@ -61,11 +56,6 @@
 
     <!-- Page 2: Left-hand (Even) -->
     <div class="page even">
-		<div class="result-layer"></div>
-		<div class="guide-layer"></div>
-		<div class="mockup-layer"></div>
-		<div class="white-layer"></div>
-
         <div class="grid-container">
             <div class="column left-col">
                 <p>Page 2, Column 1 content...</p>
@@ -84,27 +74,18 @@
     <!-- Add more pages following the odd/even pattern -->
     <!-- ... rest of your html ... -->
 
-	<script>
-	document.addEventListener('keydown', (e) => {
-		const key = e.key.toLowerCase();
-		const imageMap = {
-			'r': 'show-result',
-			'g': 'show-guide',
-			'm': 'show-mockup',
-			'w': 'show-white'
-		};
-
-		if (imageMap[key]) {
-			document.body.classList.toggle(imageMap[key]);
-		} else if (key === 'o') {
-			// Toggle red/blue outlines
-			document.body.classList.toggle('debug-on');
-		} else if (key === 'x') {
-			// Master reset: Remove everything
-			document.body.classList.remove('debug-on', ...Object.values(imageMap));
-		}
-	});
-	</script>
-
+    <script>
+        document.addEventListener('keydown', function(event) {
+            // Check if 'd' key was pressed
+            if (event.key.toLowerCase() === 'd') {
+                // Toggles the .debug-on class on the body
+                document.body.classList.toggle('debug-on');
+                
+                // Feedback in the browser's F12 console
+                const status = document.body.classList.contains('debug-on') ? 'ON' : 'OFF';
+                console.log('Debug Overlay: ' + status);
+            }
+        });
+    </script>
 </body>
 </html>

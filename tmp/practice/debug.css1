@@ -60,19 +60,24 @@ body.show-white .white-layer {
 /* Working Layer (Your HTML) sits at the default z-index (roughly 0-100) */
 
 /* -----------------------------------------------------------
-   3. STRUCTURAL DEBUGGING (Independent d-key Toggle)
+   3. STRUCTURAL DEBUGGING (Visible when ANY HUD is active)
    ----------------------------------------------------------- */
 
-/* Show column boundaries in Red ONLY when 'd' is pressed */
-body.debug-on .column {
+/* Show column boundaries in Red */
+body.show-result .column,
+body.show-guide .column,
+body.show-mockup .column,
+body.show-white .column {
     outline: 1px solid rgba(255, 0, 0, 0.5);
     outline-offset: -1px;
 }
 
-/* Show the grid gutter/container in Blue ONLY when 'd' is pressed */
-body.debug-on .grid-container {
+/* Show the grid gutter/container in Blue */
+body.show-result .grid-container,
+body.show-guide .grid-container,
+body.show-mockup .grid-container,
+body.show-white .grid-container {
     outline: 1px dashed rgba(0, 0, 255, 0.3);
     outline-offset: -1px;
 }
-
 

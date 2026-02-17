@@ -1,0 +1,54 @@
+/* debug.css */
+body.debug-on .page::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 148mm;
+    height: 210mm;
+    /* Use the 96 DPI version for browser overlay accuracy */
+    background-image: url('page-image.png');
+    background-size: 148mm 210mm;
+    background-repeat: no-repeat;
+    opacity: 0.5; 
+    z-index: 9999;
+    pointer-events: none;
+    
+    /* Default:ange the image to a Warm Red Tint to differentiate it*/
+    filter: sepia(100%) hue-rotate(-50deg) saturate(500%);
+}
+
+/* dont give the overlay image any tint */
+body.debug-on .page.no-tint::before {
+    filter: none;
+}
+
+/* give the overlay image a Red Tint */
+body.debug-on .page.red-tint::before {
+    filter: sepia(100%) hue-rotate(-50deg) saturate(500%);
+}
+
+/* give the overlay image a Green Tint */
+body.debug-on .page.green-tint::before {
+    filter: sepia(100%) hue-rotate(70deg) saturate(500%);
+}
+
+/* give the overlay image a Blue Tint */
+body.debug-on .page.blue-tint::before {
+    filter: sepia(100%) hue-rotate(180deg) saturate(500%);
+}
+
+/* Use outline instead of border to avoid layout shift */
+body.debug-on .page.column {
+    outline: 1px solid rgba(255, 0, 0, 0.5);
+	outline-offset: -1px;
+    /* Optional: pushes the red line 1px outside the actual box */
+    outline-offset: -1px;
+}
+
+/* Optional: Outline the gutter to verify the 4.2mm spacing */
+body.debug-on .page.grid-container {
+    outline: 1px dashed rgba(0, 0, 255, 0.3);
+	outline-offset: -1px;
+}
+
