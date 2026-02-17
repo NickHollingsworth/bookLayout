@@ -1,0 +1,99 @@
+I am asking for help defining a way to use css grid to place content in areas of a page.
+
+Context: I am building a deterministic, print-oriented document pipeline that allows a user to author in plain markdown with the addition of directives.
+
+The existing system consists of python code with configuration files and some html and css.
+
+The process is:
+1. User edits a markdown file. This is standard common mark / git flavour markdown. The user can also insert tokens that are intended to look like the sort of marks a human would insert in text to indicate intent or layout to editors and people who do the page layout.
+2. On save a preprocess looks for defined tokens and replaces them with strings resulting in a new 'enhanced' markdown file that also contains html and provides some css to wrap sections of the text later.
+3. Then a build process turns the enhanced markdown into html and css.
+4. The user sees the results update in a browser they are using to watch the html which has a refresh timer running on it. From the users point of view each time they save the markdown the view in the browser updates.
+5. When they are happy the user uses the browser to print to pdf. The intent is that the pdf is exactly as they see the content on the screen, the html and css are designed with that in mind - that the depiction on the screen is exactly as the same content will print to pdf or a printer.
+
+Markdown > (preprocess) > Enhanced Markdown > (build) > HTML and CSS > (chrome browser) > Pdf
+
+Important constraints, the html and css are used to define exact layout as with a book not to allow the browser to fit the content to suit the space as would be the case with a web page, specifically:
+. Fixed-layout pages only (A5/A4 in mm/pt).
+. No responsive layout.
+. No flexbox.
+. No auto flow decisions by the browser.
+. No transforms for positioning.
+. CSS Grid must be used purely as a coordinate system.
+. Grid rows/columns are fixed and explicit.
+. Overflow is an error (will later be detected via JS).
+. Screen rendering must mirror print exactly (screen only adds debug overlays).
+
+Each page is explicitly marked as [[page]] in the original markdown which results in the html for the page being wrapped as:
+<section class="page" data-page="N">
+
+I want to add a grid layout capability that allows:
+. Defining a base CSS Grid on .page.
+. Defining named grid areas.
+. Allowing the author to place content into specific grid areas.
+. Supporting different page “types” (e.g., one-column, two-column, sidebar, image layout) that reuse the same underlying base grid.
+
+Pages are explicit containers (.page) with fixed physical size (mm / pt), so use CSS Grid as a coordinate system, not for flow:
+. Fixed rows and columns.
+. Grid defines where content may go, not how it auto-flows.
+
+The user will have a number of page layouts.
+Each must use a grid to define areas of the page they wish to use.
+I assume areas will be defined as one or more cells in the css grid.
+The human will think of types of pages with names like Section Start, Two Column Page, Single Column Page, Illustration, and so on. For a given type of page they will think of the areas of the page in terms like Header, Title, Left Column, Right Column, Upper Third, Sidebar, Footnotes, Central Image. 
+
+The solution must:
+. Keep DOM order equal to reading order. DOM order must always follow the intended reading order; grid placement must not require moving nodes. The preprocessor may reorder source blocks before render, but CSS must not.
+. Avoid CSS features that cause layout reflow or automatic fitting.
+. Use physical units (mm/pt).
+. Be deterministic and reproducible.
+. Avoid runtime JS layout logic. Runtime JS may be used for diagnostics only (overflow detection, debug labels), not for layout decisions.
+. Prefer semantic class names in HTML.
+. Be version-control friendly, specifically git.
+. Be easy for the human (who in the finished version will not be writing the html or css but having it generated from their html) to inspect the html and css, understand it and debug problems easily.
+. classes and other labels must be meaningful and human readable
+. the approach must be easy to understand by the human, ie non convoluted messy or complex
+
+We are going to get the solution working in html and css first and chack that it prints to pdf accurately. 
+Once that works we will
+1. enable a ‘debug mode’. The  CSS will show: grid lines, named area outlines, and each placed block’s area name (e.g. via `::before` content). Debug mode must be toggled by a single class on `<body>` or query param. The user will be able to tirn this on and off.
+2. add Overflow detection. This will (a) highlight the offending frame visually in the browser, (b) print a console report listing: output html file, page number, element selector/id/class, grid area name, and overflow amount, and (c) return non-zero exit code in CI/build.
+3. define a way for the user to say what sort of page they are working on and, for each block of text, what grid areas it goes in using a name for the area rather than having to specify the html or css for it. This will presumably use tokens which will expand during preprocesing to the necessary html and css and make use of the expanded markdown facilities we have built in.
+
+find a way to turn it into simple meaningful tokens theuser can write in their markdown.
+
+What I want from you:
+1. A clear architectural proposal for:
+  * Defining a base grid (columns, rows, baseline rhythm). 
+  * Defining reusable named grid areas.
+  * Applying page layout presets (e.g., .layout-feature, .layout-two-column).
+2. CSS example showing:
+  * A base page grid.
+  * Two layout variants.
+  * Named areas defined via grid-template-areas.
+3. A proposal for how authors specify placement in Markdown, e.g.:
+  * Using block-level classes (already supported via markdown-it-attrs).
+  * Or via custom directives like [[AREA: sidebar]].
+4. Guidance on:
+  * Handling overflow (structurally, not automatically).
+  * Preventing accidental auto-placement.
+  * Avoiding implicit grid creation.
+
+In a previous chat with me (titled 'CSS Grid Layout Basics') you laid out a basic approach:
+. Use a fixed baseline grid: rows are a fixed physical unit (e.g. 4mm or 12pt).
+. All vertical sizing and alignment is derived from integer multiples of that row. 
+. No implicit grid tracks: disallow `grid-auto-flow`, `grid-auto-rows`, `grid-auto-columns` (or set them explicitly), and prefer assigning every placed block via `grid-area`.
+. Pages are rendered as `.page` elements in the normal flow; page breaks are achieved via `break-after: page` (or `page-break-after`). 
+. Chrome print settings must be consistent (margins off / scale 100%). 
+. Every placed content block (frame) must have a stable identifier emitted by the preprocessor, e.g. `data-src="page.md:123"` or `data-block-id="foo"`, so reports map back to source.  
+. Start with a minimal working example: one `.page` with a base grid and two areas (main + sidebar), then add a second layout preset.
+
+Do not assume responsive design or paged-media engines.
+Assume Chrome is the renderer.
+Assume deterministic DTP-style control is required.
+
+Remember we want to start with just the html and css solution first before we add the other features.
+
+Be precise and practical.
+
+If you wish I can provide the current html template and the code that expands the page directive, or other code you need to see.

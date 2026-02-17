@@ -1,0 +1,362 @@
+Book Layout Pipeline – Usage Guide
+
+
+# Overview
+
+This project converts:
+
+Markdown
+→ Preprocessed Markdown (directives expanded)
+→ HTML
+→ Chrome print-to-PDF
+
+
+# Design goals:
+
+Deterministic layout
+
+Explicit page containers
+
+No responsive flow
+
+Errors visible and fail-fast by default
+
+
+# Project Structure
+
+.
+├── src/ # Source Markdown files
+├── tmp/
+│ ├── step-1-enhanced-md/ # Preprocessed Markdown
+│ └── step-2-resulting-html/ # Final HTML
+├── tools/
+│ ├── build.py
+│ ├── build.conf
+│ ├── preprocess.conf
+│ ├── build/
+│ │ ├── preprocess.py
+│ │ ├── render.py
+│ │ ├── terminal.py
+│ │ └── ...
+│ ├── templates/
+│ │ └── page.html
+│ ├── style/
+│ │ └── style.css
+│ ├── snippets/
+│ │ └── example.html
+
+
+# Setup
+
+From project root:
+
+python3 -m venv .venv
+source .venv/bin/activate
+pip install watchdog
+
+
+# Run:
+
+python3 tools/build.py
+
+Writing a Source Markdown File
+
+Create files in:
+
+src/*.md
+
+
+# Example:
+
+Title
+
+Some content.
+
+[[page]]
+
+Page 2
+
+More content.
+
+Built-in Directive
+
+[[page]]
+
+Splits content into fixed page sections:
+
+<section class="page" data-page="N">
+
+
+Each page is:
+
+fixed A5 size
+
+deterministic layout
+
+no flow between pages
+
+Running the Builder
+
+Normal build:
+
+python3 tools/build.py
+
+Runs:
+
+Preprocess
+
+Render to HTML
+
+Build one file:
+
+python3 tools/build.py page
+
+Preprocess only:
+
+python3 tools/build.py -p
+
+Render only:
+
+python3 tools/build.py -r
+
+Watch Mode
+
+Rebuild automatically when files change:
+
+python3 tools/build.py -w
+
+Behaviour:
+
+Stops on first error (default)
+
+Continues if -c used
+
+Useful Flags
+
+-v Verbose (show file operations)
+-w Watch mode
+-p Preprocess only
+-r Render only
+-c Continue on directive errors
+-e Embed directive errors into output
+--config Override config file
+
+Error Handling Modes
+
+Default (fail-fast):
+
+First directive error stops build
+
+Exit code non-zero
+
+Watch mode stops
+
+-c Continue:
+
+Errors reported
+
+Directive left unchanged
+
+Build continues
+
+-e Embed:
+
+Visible Markdown block showing error inserted into output
+
+Viewing Output
+
+Start a simple server:
+
+python3 -m http.server 8000
+
+Open:
+
+http://localhost:8000/tmp/step-2-resulting-html/page.html
+
+For auto-refresh:
+
+Add ?reload=1 to the URL.
+
+Defining Directives
+
+Edit:
+
+tools/preprocess.conf
+
+Simple Directive
+
+[[EXAMPLE]] = <div class="example"></div>
+
+Use in Markdown:
+
+[[EXAMPLE]]
+
+Directive With Arguments
+
+Definition:
+
+[[EXAMPLE_WITH_ARGS, first, second="alpha", third="beta gamma"]] =
+Replacement text first is ${first}
+second is ${second}
+third is ${third}
+
+Usage:
+
+[[EXAMPLE_WITH_ARGS, value1, third=value3]]
+
+Rules:
+
+Required args must be provided
+
+Named or positional allowed
+
+Optional args have defaults
+
+Unknown args → error
+
+Missing required args → error
+
+Multiline Replacement (Fenced)
+
+[[BLOCK, title]] = ```
+
+<div class="block"> <h2>${title}</h2> </div> ```
+
+Triple backticks define a multiline template.
+
+Using Snippet Files
+
+[[CARD]] = @file:snippets/card.html
+
+Snippet file contents become the template.
+
+Unrecognized Directives
+
+If a directive name is not defined in preprocess.conf:
+
+It is left unchanged.
+
+No error.
+
+CSS Styling
+
+Global CSS:
+
+tools/style/style.css
+
+Uses:
+
+Fixed A5 size
+
+Fixed padding
+
+No flexbox
+
+No auto layout
+
+CSS Grid as coordinate system
+
+Add CSS Classes Directly in Markdown
+
+Using markdown-it-attrs:
+
+Heading {.class-name}
+
+or:
+
+{.class-name}
+Some block
+
+Add Styling in Directives
+
+Example:
+
+[[BOX, title]] = ```
+
+<div class="box"> <div class="box-title">${title}</div> <div class="box-body"> ```
+
+Define matching CSS:
+
+.box {
+border: 1pt solid black;
+padding: 4mm;
+}
+
+Layout Philosophy
+
+.page is fixed 148mm × 210mm
+
+No content flow between pages
+
+Overflow = layout error
+
+DOM order = reading order
+
+Screen mirrors print exactly
+
+Adding New Directives
+
+Add entry to tools/preprocess.conf
+
+Use ${arg} placeholders
+
+Use triple backticks for multiline
+
+Use @file: for reusable blocks
+
+Rebuild
+
+No Python changes required unless adding new structural directives.
+
+Typical Workflow
+
+source .venv/bin/activate
+python3 tools/build.py -w -v
+
+Edit files in:
+
+src/
+
+tools/preprocess.conf
+
+tools/style/style.css
+
+View in browser with auto-reload.
+
+When layout stable:
+Print to PDF via Chrome.
+
+Printing to PDF
+
+Open HTML in Chrome:
+
+File → Print
+Destination → Save as PDF
+Paper size → A5
+Margins → None
+
+CSS @page controls physical layout.
+
+If Something Breaks
+
+Common causes:
+
+Missing required directive argument
+
+Unterminated triple-backtick block in conf
+
+Missing snippet file
+
+Incorrect placeholder name
+
+Use:
+
+-c -e -v
+
+to:
+
+see all errors
+
+embed them visibly
+
+keep watch running
