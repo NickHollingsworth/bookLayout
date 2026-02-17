@@ -1,0 +1,55 @@
+To overlay a web page over an image when trying to recreate the image as a page.
+
+1. get an image of the page
+---------------------------
+
+If recreating a pdf as a web page get an image of the required page with:
+
+     pdfToImage.sh -p <page number> -r screen input.pdf output.png
+
+note: this script is hardcoded to make pngs
+
+
+2. set your css to overlay the image
+------------------------------------
+
+add this to the end of your css to cause the image to overlay the .page div
+(it has its opacity set so you can see through the image to the page)
+
+/* THE OVERLAY TOGGLE */
+.page.debug::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 148mm;
+    height: 210mm;
+    
+    /* Point to your generated PNG */
+    background-image: url('page-image.png');
+    background-size: contain;
+    background-repeat: no-repeat;
+    
+    /* 0.5 makes it a ghost image; 0.0 hides it */
+    opacity: 0.5; 
+    
+    /* Ensure it sits on top of your text */
+    z-index: 9999;
+    
+    /* Prevent the image from blocking text selection while debugging */
+    pointer-events: none;
+}
+
+3. Use it
+---------
+
+cp your-image.png page-image.png in the same directory as the html
+
+To overlay the image over a page
+  Add the debug class to your HTML: <div class="page odd debug">.
+To tint or not tint the image to make comparison easier
+  make it <div class="page odd debug no-tint"> 
+ choose from no-tint, red-tint, blue-tint or green-tint
+
+toggle the image on and off by pressing d
+

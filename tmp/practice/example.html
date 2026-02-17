@@ -5,11 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>A5 Pre-Processed Layout</title>
     <link rel="stylesheet" href="style.css">
+    <!-- Link the debug overlay here -->
+    <link rel="stylesheet" href="debug.css">
 </head>
-<body>
+<body class="debug-mode" >
 
     <!-- Page 1: Right-hand (Odd) -->
-    <div class="page odd">
+    <div class="page odd debug">
         <div class="grid-container">
             <div class="column left-col">
 
@@ -70,7 +72,20 @@
     </div>
 
     <!-- Add more pages following the odd/even pattern -->
+    <!-- ... rest of your html ... -->
 
+    <script>
+        document.addEventListener('keydown', function(event) {
+            // Check if 'd' key was pressed
+            if (event.key.toLowerCase() === 'd') {
+                // Toggles the .debug-on class on the body
+                document.body.classList.toggle('debug-on');
+                
+                // Feedback in the browser's F12 console
+                const status = document.body.classList.contains('debug-on') ? 'ON' : 'OFF';
+                console.log('Debug Overlay: ' + status);
+            }
+        });
+    </script>
 </body>
 </html>
-

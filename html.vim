@@ -30,16 +30,16 @@ command! -nargs=1 Wrap s/\s\+$//e | execute "normal! I<<args>>\<Esc>A</<args>>\<
 "        @F       for <h4>  (level Four)
 "        @D       for <div>
 "    To wrap the next 8 lines in p tags:
-"        8@p
+"        8@P
 "    To make more macros just record the relevant macro, for example to
-"    surround the line with div tags as macro d (ie @d), then:
-"        qd:Wrap div[Enter]jq
-let @p = "I<p>\<Esc>A</p>\<Esc>j"
+"    surround the line with span tags as macro s (ie @s), then:
+"        qd:Wrap span[Enter]jq
+let @P = "I<p>\<Esc>A</p>\<Esc>j"
 let @O = "I<h1>\<Esc>A</h1>\<Esc>j"
 let @T = "I<h2>\<Esc>A</h2>\<Esc>j"
 let @H = "I<h3>\<Esc>A</h3>\<Esc>j"
 let @F = "I<h4>\<Esc>A</h4>\<Esc>j"
-let @d = "I<div>\<Esc>A</div>\<Esc>j"
+let @D = "I<div>\<Esc>A</div>\<Esc>j"
 
 " Clean 
 " --------------------------------------------
@@ -71,7 +71,14 @@ command! -range -nargs=1 JoinWrap <line1>,<line2>join | <line1>s/\s\+$//e | exec
 "     To wrap up to and *including* the next period in a <h2>:
 "         vf.:VWrap h2
 "     (note: f finds and moves onto the character, t moves before 'till' it)
-command! -range -nargs=1 VWrap execute "normal! c<<args>>\<C-r>\"</<args>>\<Esc>"
+"     You cant repeat something like vf.:VWrap strong, but you can record 
+"     it as a macro with:
+"         qsvf.:VWrap strong[Enter][Enter]
+"     (note: the second enter is to position on the next line, but it could be
+"     more complex to locate the next position to wrap with strong).
+"     Then execute the macro as normal with @s and repeat it with @@.
+"     (note: the gv in the command 'gets back' your visual selection which
+"     disappears when you type : to enter the command).
 " VWrap <tag> - Works correctly with sub-line visual selections
 command! -range -nargs=1 VWrap execute "normal! gvc<<args>>\<C-r>\"</<args>>\<Esc>"
 

@@ -1,3 +1,10 @@
+overlay the page over an exactly sized image from the pdf to see the diffs!
+
+seperate the tools area and move the scripts etc in the top directory to have cclearer directories for 
+utils i use while working (like my pdf cut import thing and my vim helpers
+stuff used at runtime by the renderer
+stuff used by the browers like the html to layout the results.
+ask ai for a clearer structure
 
 give me a document on how to use this. It should cover:
 . how to create a source markdown document, run the builder, start a server to see the results, run in watch mode and the various arguments to the build
