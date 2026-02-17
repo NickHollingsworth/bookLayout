@@ -20,16 +20,25 @@ command! -nargs=1 Wrap s/\s\+$//e | execute "normal! I<<args>>\<Esc>A</<args>>\<
 " --------------------------------------------
 "    Inserts its opening tag before the first none whitespace character and 
 "    its closing tag at the end (having also stripped any trailing whitespace).
-"    To wrap current line in h1 tags:
-"        @1
+"    (Note: Have used UPPERCASE registers in the hope it reduces the change
+"    they get overwritten by macros the user records durig the session).
+"    To wrap current line in tags:
+"        @P       for <p>
+"        @O       for <h1>  (level One)
+"        @T       for <h2>  (level Two)
+"        @H       for <h3>  (level tHree)
+"        @F       for <h4>  (level Four)
+"        @D       for <div>
 "    To wrap the next 8 lines in p tags:
 "        8@p
 "    To make more macros just record the relevant macro, for example to
 "    surround the line with div tags as macro d (ie @d), then:
 "        qd:Wrap div[Enter]jq
 let @p = "I<p>\<Esc>A</p>\<Esc>j"
-let @1 = "I<h1>\<Esc>A</h1>\<Esc>j"
-let @2 = "I<h2>\<Esc>A</h2>\<Esc>j"
+let @O = "I<h1>\<Esc>A</h1>\<Esc>j"
+let @T = "I<h2>\<Esc>A</h2>\<Esc>j"
+let @H = "I<h3>\<Esc>A</h3>\<Esc>j"
+let @F = "I<h4>\<Esc>A</h4>\<Esc>j"
 let @d = "I<div>\<Esc>A</div>\<Esc>j"
 
 " Clean 
@@ -63,4 +72,7 @@ command! -range -nargs=1 JoinWrap <line1>,<line2>join | <line1>s/\s\+$//e | exec
 "         vf.:VWrap h2
 "     (note: f finds and moves onto the character, t moves before 'till' it)
 command! -range -nargs=1 VWrap execute "normal! c<<args>>\<C-r>\"</<args>>\<Esc>"
+" VWrap <tag> - Works correctly with sub-line visual selections
+command! -range -nargs=1 VWrap execute "normal! gvc<<args>>\<C-r>\"</<args>>\<Esc>"
+
 
