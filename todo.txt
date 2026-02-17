@@ -1,3 +1,7 @@
+look at googles explanation of the 6 parts involved in the debug and overlay
+merge them into the generator adding an arg that says if they are required.
+document the process from the users pov carefully
+
 overlay the page over an exactly sized image from the pdf to see the diffs!
 
 seperate the tools area and move the scripts etc in the top directory to have cclearer directories for 
