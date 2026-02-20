@@ -1,0 +1,27 @@
+@page { size: A4; margin: 20mm; }
+.page { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; height: 250mm; }
+
+/* The "Canary" Box: forced scrollbars if text is too long */
+.box { 
+  border: 1px solid #ccc; 
+  padding: 10px; 
+  overflow: auto; /* Triggers scrollbar on overflow */
+}
+
+/* Visual Guide: If Chrome detects a scrollbar, make it Bright Red */
+.box::-webkit-scrollbar { background: red; width: 10px; }
+Use code with caution.
+
+check.js (The "Safety Net" script)
+This script runs inside the browser and marks overflows visually.
+javascript
+window.onload = function() {
+  document.querySelectorAll('.box').forEach(el => {
+    if (el.scrollHeight > el.clientHeight) {
+      console.error("OVERFLOW DETECTED: " + el.innerText.substring(0,20) + "...");
+      el.style.border = "5px solid red";
+      el.style.backgroundColor = "#fff0f0";
+    }
+  });
+};
+

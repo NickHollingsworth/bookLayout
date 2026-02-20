@@ -1,3 +1,5 @@
+Lets test google ai's idea of using GPP or Jinja2-cli and also het an end to end process working with the triggers automating it. create a simple end to end process that replaces a [[HELLO]] tokenand a who arge with "Hello ${name}". then pass it through the stages (using the python but only the markdown step as we are testing an alternate preprocessor) and headless print and post processing and preflight checks.
+
 look at googles explanation of the 6 parts involved in the debug and overlay
 merge them into the generator adding an arg that says if they are required.
 document the process from the users pov carefully

@@ -1,0 +1,173 @@
+This spike creates a "hardened" pipeline on Ubuntu 25.10. It converts Markdown to HTML for your Chrome preview, then to a PDF via Headless Chrome with an automated Overflow Safety Check and a Preflight font validation.
+1. Installation
+Install the core engine, the PDF renderer (Chrome), a PDF viewer that auto-reloads (Zathura), and the "watcher" utility (entr).
+bash
+# Update and install utilities
+sudo apt update
+sudo apt install pandoc entr zathura ghostscript wget -y
+
+# Install Google Chrome Stable
+wget https://dl.google.com
+sudo dpkg -i google-chrome-stable_current_amd64.deb
+sudo apt install -f -y
+Use code with caution.
+
+2. The Project Files
+Create a new folder and add these four files:
+metadata.yaml (Variables)
+yaml
+---
+val1: "Hello"
+val2: "World"
+...
+Use code with caution.
+
+style.css (Grid & Visual Debugging)
+css
+@page { size: A4; margin: 20mm; }
+.page { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; height: 250mm; }
+
+/* The "Canary" Box: forced scrollbars if text is too long */
+.box { 
+  border: 1px solid #ccc; 
+  padding: 10px; 
+  overflow: auto; /* Triggers scrollbar on overflow */
+}
+
+/* Visual Guide: If Chrome detects a scrollbar, make it Bright Red */
+.box::-webkit-scrollbar { background: red; width: 10px; }
+Use code with caution.
+
+check.js (The "Safety Net" script)
+This script runs inside the browser and marks overflows visually.
+javascript
+window.onload = function() {
+  document.querySelectorAll('.box').forEach(el => {
+    if (el.scrollHeight > el.clientHeight) {
+      console.error("OVERFLOW DETECTED: " + el.innerText.substring(0,20) + "...");
+      el.style.border = "5px solid red";
+      el.style.backgroundColor = "#fff0f0";
+    }
+  });
+};
+Use code with caution.
+
+spike.md (Content)
+markdown
+# $val1$ $val2$
+
+::: {.page}
+::: {.box}
+This text fits perfectly in the left box.
+:::
+
+::: {.box}
+This text is intentionally very long to test the overflow detection. 
+Repeat this line ten times to see the red warning trigger in your 
+preview and the final PDF build!
+:::
+:::
+Use code with caution.
+
+3. The Build Script (build.sh)
+This script coordinates Pandoc, Chrome, and the Preflight checks.
+bash
+#!/bin/bash
+# 1. Markdown -> HTML (Injects the JS checker)
+pandoc spike.md --metadata-file=metadata.yaml --css style.css \
+    --include-in-header=check.js -s -o preview.html
+
+# 2. HTML -> PDF (Headless Chrome)
+google-chrome --headless=new --disable-gpu --print-to-pdf=final.pdf preview.html
+
+# 3. Preflight: Font Embedding Check
+echo "--- PREFLIGHT: FONT CHECK ---"
+gs -q -dNODISPLAY -dNODisplay -c "(final.pdf) (r) file runpdfbegin 1 1 pdfpagecount { pdfgetpage /Resources get /Font gets { exch == (Embedded: ) print dup /FontDescriptor known { /FontDescriptor get /FontFile known } { false } ifelse == } forall } for"
+Use code with caution.
+
+Run chmod +x build.sh after saving.
+4. Running the "Live" Environment
+Terminal 1 (The Watcher):
+bash
+ls spike.md style.css metadata.yaml | entr ./build.sh
+Use code with caution.
+
+Browser: Open preview.html in Chrome.
+PDF Viewer: Open final.pdf in Zathura.
+What you see now:
+The Editor: You change $val1$.
+The Browser: Updates instantly. Use F12 to inspect the Grid.
+The PDF: Updates in Zathura. If you see a red border, you have an overflow.
+The Terminal: Prints a Ghostscript report confirming fonts are embedded for the printer.
+Proactive Follow-up: This spike confirms the Pandoc → Chrome → PDF path. Shall we now implement the GPP layer to replace the ::: {.box} blocks with your preferred [[BOX]] tokens?
+
+---------------------------------------------------------------------------
+
+1. Install GPP
+If you haven't already:
+bash
+sudo apt install gpp -y
+Use code with caution.
+
+2. Create the Macro File (macros.gpp)
+This translates your preferred "human" tokens into the "structural" syntax Pandoc requires.
+bash
+# Define the page wrapper
+<#define PAGE|<div class="page">>
+
+# Define a box with a custom class argument
+# Usage: [[BOX, left-column]]
+<#define BOX|<div class="box $1">>
+
+# Closing tag for either
+<#define END|</div>>
+Use code with caution.
+
+3. Update your Markdown (spike.md)
+Now you can write using the clean tokens you originally envisioned.
+markdown
+[[PAGE]]
+  [[BOX, header]]
+    # $val1$ $val2$
+  [[END]]
+
+  [[BOX, main]]
+    This is the main content area.
+  [[END]]
+[[END]]
+Use code with caution.
+
+4. Update the Build Script (build.sh)
+Add the GPP step at the very beginning of the pipeline. Note the -U flags which set your [[ ]] and , delimiters.
+bash
+#!/bin/bash
+
+# 1. Preprocess: Human Tokens -> Pandoc Markdown
+# -U "[[" "]]" "" "," "" "(" ")" "#" ""
+gpp -U "[[" "]]" "" "," "" "(" ")" "#" "" -T macros.gpp spike.md > build.md
+
+# 2. Markdown -> HTML (Injecting the JS overflow checker)
+pandoc build.md --metadata-file=metadata.yaml --css style.css \
+    --include-in-header=check.js -s -o preview.html
+
+# 3. HTML -> PDF (Using Headless Chrome 145)
+google-chrome --headless=new --disable-gpu --print-to-pdf=final.pdf preview.html
+
+# 4. Preflight: Font Embedding Check
+echo "--- PREFLIGHT: FONT CHECK ---"
+gs -q -dNODISPLAY -dNODisplay -c "(final.pdf) (r) file runpdfbegin 1 1 pdfpagecount { pdfgetpage /Resources get /Font gets { exch == (Embedded: ) print dup /FontDescriptor known { /FontDescriptor get /FontFile known } { false } ifelse == } forall } for"
+Use code with caution.
+
+5. Update the Watcher
+Change the entr command to watch your new macro file as well:
+bash
+ls spike.md style.css metadata.yaml macros.gpp | entr ./build.sh
+Use code with caution.
+
+What This Spike Proves
+GPP handles the "Human-to-Machine" translation, ensuring your manuscript stays readable.
+Pandoc handles the variable injection (
+) and structural document metadata.
+Chrome 145 ensures that what you see in the browser window is exactly what Headless Chrome puts in the PDF.
+Ghostscript confirms the PDF is technically "Preflight Ready" for professional printing.
+Proactive Follow-up: Would you like to see how to make GPP automatically include your stats files so you don't have to manually update the metadata.yaml for every minor change?

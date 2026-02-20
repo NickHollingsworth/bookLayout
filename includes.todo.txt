@@ -1,0 +1,113 @@
+On a linux (ubuntu 25.10) laptop i want a tool that can preprocess a text input and produce text output. i
+
+The input can include directives and tokens (hereafter both referred to as tokens) and also variables.
+
+A preprocess process takes the input and produces the output replacing placeholders and tokens in the text and acting on directives.
+
+Variables can be defined inside the input or passed in as arguments. Regardless of how they are set they can be inserted into the output via placeholders in the input.
+
+Tokens are acted on or replaced by the preprocess which understands the directives and has a config file that tells it what the tokens are to be replaced by.
+
+Most tokens are simply replaced by a new text string.
+
+Tokens can contain other tokens to allow synonyms to be defined and to allow nested replacement and more complex behaviour to be built up.
+
+Some tokens mark start and/or end points for blocks of text.
+
+Some tokens have special meaning and have more complex behaviour like wrapping blocks of text with their start or end replacement strings.
+
+Some tokens have arguments that become available inside their replacement strings which have placeholders to make use of them. The replacement strings (defined in the config file) can contain placeholders and these are the same form whether they refer to arguments in the token in the input file or variables that were set in the input file or carried in as arguments from the command line.
+
+Since tokens or variables can be replaced by text that includes tokens or placeholders for variables some safeguard needs to exist to stop unreasonable looping if it happens.
+
+Some tokens are include directives that include other files wholesale. This can nest so thos files can include others. All the tokens replacement and variables etc are also applied to the included files. There are safeguards to either stop recursive inclusion completely or to limit the depth of inclusion to stop out of control loops.
+
+The format of the tokens and placeholders does not matter but as an example they might they might be defined like this:
+	SOMETOKEN="a replacement string"
+	Token with arguments [[TOKENWITHARGS,arg1,arg2="default value",arg3="whatever"]]
+and a variable might be passed in asi an argument on the command line (that is not a predefined recognised argument but an ad hoc one just passed into the program) like:
+	myprocess -someArg="/some/path"
+and them might all be embedded in the input text like this:
+    Setting another variable: [[LET otherVar="/else/where"]]
+	Token to be replaced: [[SOMETOKEN]]
+	Token with arguments: [[TOKENWITHARGS, "value 1", arg3="value 3"]] (and arg2 would take its default in this example)
+	Placeholder for variable or argument: ${someArg}
+	Token using variable to set an argument: [[TOKENWITHARGS,${someArg},arg3="some text ${otherVar} here"]]
+the desire is tokens and directives are very easy for a human writer to scan and understand and look like they might be directives to a human editor or person doingthe layout. But that the whole thing is enough to build comlex replacement easily for the human to configure. And also that everything is plain text for good version control.
+
+I am currently working on writing this software. However I want a sanity check that such a command line tool does not already exist in the linux world. I am aware for example of the c preprocessor that does token replacement and can perform includes.
+
+What tools already exist that would suit my needs and are easy to drive from the command line. What are their pros and cons.
+
+--------
+
+The process is a sequence of transformations each with input and output files.
+
+1. The user edits the markdown file and saves.
+2. The changed markdown file triggers the preprocessor (either GPP, Jinja2 or a bespoke python one) which, driven by definitions in the config file recursively replaces tokens and variables, executes directives and includes include files. The result is an enhanced markdown file that has 
+3.  a python process triggers because of the new/changed enhanced markdown file. It processes the markdown producing html.
+4. If the user is watching in chrome the user sees the resulting html update on screen (there is a javascript script that causes it to reload). The page is styled by css which controls the layout, this is where most of the layout logic lies, classes and and ids as well as additional html elements have been placed by the preprocessor to help drive this, but much of the work was done by the python libraries.  At the same time the headerless chrome prints the html to pdf.
+5 The change in the pdf triggers a post processing preflight step where command line tools add print marks, adjust the colours to CMYB and add the crop marks for example..
+6. If the user is watching in a pdf viewer they see the pdf update with the final result of their work so far. (This may or may not be the preflight version or an earlier one, i dont know).
+
+Each stage is triggered when its input files change, as long as this can be done cleanly without false activity. At the very least every time the user saves the markdown file it triggers the full run.
+
+one of the reasons the preprocessor was being written in python was to enable this cascading processing and because python was already being used to enable a rich markdown capability. However there is no reason why the preprocess step could not be a two phase thing if that is easier.
+
+--------
+
+
+Examples of things to support:
+
+Preprocessing:
+
+#unknown tokens not removed
+In config: 
+In input text: [[NOSUCH]]
+Resulting output text: [[NOSUCH]]
+
+#simple literal replacement
+In config: [[EXAMPLE]] = <div class="example">inserted this example</div>
+In input text: [[EXAMPLE]]
+Resulting output text: <div class="example">inserted this example</div>
+
+#nested literal replacement
+In config: [[TOKEN1]]="a replacement string"
+           [[TOKEN2]]="start [[TOKEN1]] end" 
+In input text: [[TOKEN2]]
+Resulting output text: start a replacement string end
+
+# replacement with arguments
+In config: [[TOKEN3, arg1, arg2="two", arg3="three"]]="this ${arg1} is ${two} the ${three} output"
+In input text: [[TOKEN, 1111, arg3=3333]]
+Resulting output text: this 1111 is two the 3333 output
+Where arg1 is mandatory
+
+# Multi-line via file include:
+Argument received from cli: var1="variable one"
+In config: [[SNIPPET_EXAMPLE, arg1]] = @file:snippets/example.html
+In included file: <div class="${arg1}">inserted this ${var1} example</div>
+In input text:  [[SNIPPET_EXAMPLE, "argument"]]
+Resulting output text: <div class="argument">inserted this variable one example</div>
+Note:Actual replacement text might be quite long and probably has a number of placeholders for variables, may have IF and ELSE logic and is certainly many lines long.
+
+# Multi-line fenced
+[[FENCED_EXAMPLE]] = ```html
+<div class="fenced-example">
+  <p><b>Note</b> Inserted this fenced example.</p>
+</div>
+```
+In config: 
+In input text: 
+Resulting output text: 
+
+#Include file
+In input text: [[INCLUDE somewhere/somefile.md]]
+Action taken: inserts that file at the tokens line position in the file and recursively processes it
+
+
+
+In config: 
+In input text: 
+Resulting output text: 
+
