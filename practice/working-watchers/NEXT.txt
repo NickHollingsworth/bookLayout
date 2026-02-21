@@ -1,0 +1,41 @@
+The next stages were to 
+
+1. add the post processing to improve the pdf ready to go to a printer
+
+2. add preflight checks to check the pdf is ready to go
+
+3. Add a preprocessor with GPP that uses readable tokens instead of css classes and noisy bits of the extended markdown.A
+
+4. Produce seperate pdfs for seperate purposes
+
+----
+
+dump:
+
+have we handled post processing and preflight checks
+No, we have not integrated those into the active scripts yet. We discussed the theory, but your current sync_daemon.py and md2html.py only handle the Layout and Rendering stages.
+To make this a professional "Press-Ready" system, you need to add these two specific stages to your pipeline:
+1. Pre-flight (The "Safety" Check)
+This happens inside the sync_daemon.py after the browser reloads but before the PDF is finalized.
+What to add to sync_daemon.py:
+DPI Check: Use PyMuPDF (fitz) to scan the PDF objects. If an image's effective resolution is < 300 DPI, the script should print a "RED ALERT" in your tmux pane.
+Overflow Check: A small snippet of Javascript executed via Playwright to see if any .magazine-page or .text-box has scrollHeight > clientHeight.
+2. Post-processing (The "Press" Prep)
+This happens after the PDF is written to disk. Your sync_daemon.py (or a new script) calls a Linux CLI tool to "harden" the file.
+What to add to the pipeline:
+Color Conversion: Use Ghostscript to convert the RGB PDF from Chromium into CMYK (ISO Coated v2).
+PDF/X-4 Compliance: Adding the "Output Intent" metadata so the commercial printer's RIP software knows exactly how to handle the transparency and ink limits.
+Metadata Injection: Using pypdf to write the /Title and /Author into the PDF header.
+How to implement this "Simple & Stable"
+Instead of overcomplicating the daemon, I recommend creating a prepress.py script.
+The New Workflow:
+md2html.py
+ preview.html
+sync_daemon.py
+ raw_render.pdf (Fast, for the human to see).
+prepress.py
+ press_ready.pdf (Only runs when the human is satisfied).
+Why separate them?
+Speed: You don't want to wait 2 seconds for Ghostscript to convert colors every time you fix a typo in vi.
+Deterministic: You only "bake" the final high-end file when you are ready to send it to the printer.
+Would you like the code for the prepress.py script that uses Ghostscript and PyMuPDF to do the DPI check and CMYK conversion?
