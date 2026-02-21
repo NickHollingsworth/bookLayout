@@ -1,0 +1,27 @@
+/* Standard A4 Page Setup */
+@page {
+    size: 210mm 297mm;
+    margin: 0;
+}
+
+.magazine-page {
+    width: 210mm;
+    height: 297mm;
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    grid-template-rows: repeat(12, 1fr);
+    position: relative;
+    overflow: hidden;
+    page-break-after: always;
+    background: white;
+    border: 1px solid #eee; /* Visual guide for screen */
+}
+
+/* Example: A Sidebar positioned in the grid */
+.sidebar {
+    grid-column: 9 / 13;
+    grid-row: 1 / 13;
+    background: #f4f4f4;
+    padding: 10mm;
+}
+
