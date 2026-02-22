@@ -1,0 +1,10 @@
+{
+  "server_port": 8000,
+  "debug_port": 9222,
+  "target_url": "http://localhost:8000",
+  "watch_dirs": ["./"],
+  "file_extensions": ["md", "css", "js", "html"],
+  "debounce": 0.3,
+  "user_data": "/tmp/chrome-debug"
+}
+
